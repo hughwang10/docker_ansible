@@ -10,7 +10,7 @@ RUN \
 	pip install netaddr && \
 	groupadd miepgrp && \
 	useradd -m -g miepgrp miepadm
-COPY toolsvm1/site-config /opt/miep/tools/miit/msp_miit/site-config 
+COPY toolsvm/site-config /opt/miep/tools/miit/msp_miit/site-config 
 RUN chown -R miepadm:miepgrp /opt
 RUN chmod -R 755 /opt
 #USER miepadm
