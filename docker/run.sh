@@ -6,5 +6,5 @@ docker run -it \
   -v /home/hugh/myshare/projects/TIM_AFG/live_development/out_result/miit_cmd.sh:/opt/miep/tools/miit/msp_miit/site-config/tmp/miit_cmd.sh \
   --rm --name test \
   --network host  \
-  hugh/suse421:1.0 \
+  hugh/toolsvm_ansible:1.9 \
   /bin/bash
