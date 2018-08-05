@@ -13,4 +13,6 @@ RUN \
 
 RUN echo 'localhost ansible_connection=local' > /etc/ansible/hosts
 
-CMD ansible-playbook --version
+# CMD ansible-playbook --version
+WORKDIR /project
+ENTRYPOINT ["/project/entrypoint.sh"]

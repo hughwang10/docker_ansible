@@ -1,0 +1,12 @@
+---
+- name: afgtools
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  
+  tasks:
+    - name: test
+      setup:
+      register: rst
+    - debug: msg="{{rst}}"  
+        
