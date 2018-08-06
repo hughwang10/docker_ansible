@@ -6,7 +6,7 @@
   
   tasks:
     - name: test
-      setup:
+      ping:
       register: rst
     - debug: msg="{{rst}}"  
         
