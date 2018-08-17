@@ -3,10 +3,9 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  
+
   tasks:
     - name: test
-      ping:
+      shell: ansible --version
       register: rst
-    - debug: msg="{{rst}}"  
-        
+    - debug: msg="{{rst.stdout_lines}}"
