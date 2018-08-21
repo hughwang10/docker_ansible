@@ -1,0 +1,59 @@
+---
+oam_all_ips:
+{% if groups['mn'] is defined %}
+{% for host in groups['mn'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['ts'] is defined %}
+{% for host in groups['ts'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['dk'] is defined %}
+{% for host in groups['dk'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['ddc'] is defined %}
+{% for host in groups['ddc'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['mon'] is defined %}
+{% for host in groups['mon'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['vom'] is defined %}
+{% for host in groups['vom'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['slb'] is defined %}
+{% for host in groups['slb'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['da'] is defined %}
+{% for host in groups['da'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['cim'] is defined %}
+{% for host in groups['cim'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['custom'] is defined %}
+{% for host in groups['custom'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['tools'] is defined %}
+{% for host in groups['tools'] %}
+ - {{ hostvars[host]['oam_ip'] }}
+{% endfor %}
+{% endif %}
+
+

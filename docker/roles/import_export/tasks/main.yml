@@ -1,0 +1,21 @@
+---
+# tasks file for import_export
+
+- name: Export the data to a json file
+  template: "src=export.json.jinja dest={{output_dir}}/{{export_name}}.json"
+  when: export is defined and export == true
+
+- name: Import the data from a json file
+  command: "cat {{import_file}}"
+  ignore_errors: yes
+  register: cat_output
+  when: import is defined and import == true
+
+- name: Fail gracefully if file not found
+  fail: msg="Impossible to read the import file"
+  when: import is defined and import == true and cat_output|failed
+
+- name: Import the data from JSON 
+  set_fact:
+    import_results: "{{ cat_output.stdout|from_json }}"
+  when: import is defined and import == true

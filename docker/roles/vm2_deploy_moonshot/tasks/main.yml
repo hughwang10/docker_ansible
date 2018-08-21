@@ -1,0 +1,114 @@
+---
+# Copyright (C) 2016 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm2_deploy_moonshot
+
+#
+# STEP 1: Setup the configuration for each node and cartridge
+#
+- name: "Get seed folder"
+  set_fact:
+    seed_folder: "{{ output_folder_remote }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ deploy_address }}"
+
+- name: "Getting the node"
+  set_fact:
+    node: "{{ nodes.values()[execution_host_index|int] }}"
+
+- name: "Setting the cartridge number as a fact for role vm2_deploy_moonshot"
+  set_fact: 
+    cartridge_number: "{{ node.self.split('/')[-1] | regex_replace('^\\D(\\d+)\\D\\d*$', '\\\\1') }}"
+
+- name: "Setting new vm_name_deploy fact so that cartridge number is part of instance name"
+  set_fact:
+    vm_name_deploy: "{{ vm_type }}-{{ cartridge_number}}{{ system_versiontag }}"
+
+- name: "Generating the PXE Configuration"
+  template: "src=pxe.jinja dest=/srv/tftpboot/pxelinux.cfg/01-{{ node.mac[tools_pxe_macid_from_nic].replace(':', '-') }} mode=0666"
+  with_items:
+    - { default: "{{ vm_type }}", pxe_instance_vm_name: "{{ vm_name_deploy }}" }
+  sudo: yes
+
+- name: "Create cloudinit datasource directory"
+  file: "path=/srv/www/htdocs/miit/sle12/system-config/vm/{{ vm_name_deploy }} state=directory owner=miepadm group=www mode=0750"
+  sudo: yes
+
+- name: "Copy the user-data configuration files 1/2"
+  copy: "src={{ seed_folder }}/user-data dest=/srv/www/htdocs/miit/sle12/system-config/vm/{{ vm_name_deploy }} owner=miepadm group=www mode=0750"
+  sudo: yes
+
+- name: "Copy the meta-data configuration files 2/2"
+  copy: "src={{ seed_folder }}/meta-data dest=/srv/www/htdocs/miit/sle12/system-config/vm/{{ vm_name_deploy }} owner=miepadm group=www mode=0750"
+  sudo: yes
+
+- name: "Setting group on www directory for pxe deployment"
+  action: shell chgrp -R www /srv/www/htdocs/miit/sle12
+  sudo: yes
+
+#
+# STEP 2: Setup the cartridges to PXE boot
+#
+
+# Possible states: "GracefulShutdown", "Off", "Reset", "ColdReset"
+- name: "Shutting down the Node"
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    state: "GracefulShutdown"
+
+- name: "Setup Node Boot"
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    boot: ['M.2']
+  register: cmd_result
+  ignore_errors: yes
+
+- name: "Setup Node Boot"
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    boot: ['HDD']
+  when: cmd_result | failed
+
+- name: "Setup Node BootOnce"
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    boot: 'PXE'
+    once: true
+
+# HTTP server not needed since it's already presetup on the toolsvm  
+#- name: "Copy the HTTP Server"
+#  copy: src=cloudinit.py dest=/tmp/cloudinit mode=0777
+#- name: "Launch the HTTP Server" #This is never stopped by the script
+#  shell: "cd /tmp/cloudinit&& nohup /tmp/cloudinit/cloudinit.py > /dev/null 2>&1 & echo $! > /tmp/cloudinit.pid"
+
+# COMMENT: 20s set for GracefulShutdown, othervise 10s is enough for a "Off"
+- name: Wait 20s for the Node to be stopped
+  wait_for: timeout=20
+
+- name: Boot Node - Cartridge should now PXE boot!
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    state: "On"

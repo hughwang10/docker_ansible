@@ -1,0 +1,29 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# vars file for network_create_vbox
+oam_network_vbox: "192.168.10.2"
+internal_network_vbox: "192.168.20.2"
+access_network_vbox: "192.168.30.2"
+internet_network_vbox: "192.168.40.2"
+accessingress_network_vbox: "192.168.50.2"
+internetingress_network_vbox: "192.168.60.2"
+controlplanesig_network_vbox: "192.168.70.2"
+oam_network_prefix: "192.168.10"
+internal_network_prefix: "192.168.20"
+access_network_prefix: "192.168.30"
+internet_network_prefix: "192.168.40"
+accessingress_network_prefix: "192.168.50"
+internetingress_network_prefix: "192.168.60"
+controlplanesig_network_prefix: "192.168.70"
+

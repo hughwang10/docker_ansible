@@ -1,0 +1,159 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+- name: Create download folder {{ path_to_latest }} directory
+  file: path={{ path_to_latest }} state=directory
+
+- name: "Download MN images"
+  command: wget http://{{ jenkins_srv }}:8080/job/MSP7.0_buildImage_MSA/lastSuccessfulBuild/artifact/*zip*/archive.zip --proxy=off -O {{ path_to_latest }}/mn_archive.zip
+  ignore_errors: yes
+  when: skip_mn_download != "True"
+
+- name: "Download TS images"
+  command: wget http://{{ jenkins_srv }}:8080/job/MSP7.0_buildImage_TS/lastSuccessfulBuild/artifact/*zip*/archive.zip --proxy=off -O {{ path_to_latest }}/ts_archive.zip
+  ignore_errors: yes
+  when: skip_ts_download != "True"
+
+- name: "Download DDC images"
+  command: wget http://{{ jenkins_srv }}:8080/job/MSP7.0_buildImage_DDC/lastSuccessfulBuild/artifact/*zip*/archive.zip --proxy=off -O {{ path_to_latest }}/ddc_archive.zip
+  ignore_errors: yes
+  when: skip_ddc_download != "True"
+
+- name: "Download MON images"
+  command: wget http://{{ jenkins_srv }}:8080/job/MSP7.0_buildImage_MON/lastSuccessfulBuild/artifact/*zip*/archive.zip --proxy=off -O {{ path_to_latest }}/mon_archive.zip
+  ignore_errors: yes
+  when: skip_mon_download != "True"
+
+- name: "Download VOM images"
+  command: wget http://{{ jenkins_srv }}:8080/job/MSP7.0_buildImage_VOM/lastSuccessfulBuild/artifact/*zip*/archive.zip --proxy=off -O {{ path_to_latest }}/vom_archive.zip
+  ignore_errors: yes
+  when: skip_vom_download != "True"
+
+- name: "Download SLB images"
+  command: wget http://{{ jenkins_srv }}:8080/job/MSP7.0_buildImage_SLB/lastSuccessfulBuild/artifact/*zip*/archive.zip --proxy=off -O {{ path_to_latest }}/slb_archive.zip
+  ignore_errors: yes
+  when: skip_slb_download != "True"
+
+- name: "Unpack MN zip"
+  command: unzip -o {{ path_to_latest }}/mn_archive.zip -d {{ path_to_latest }}
+  when: skip_mn_download != "True"
+
+- name: "gunzip MN vmdk"
+  shell: gzip -d "{{ mn_vmdk }}.gz"
+  ignore_errors: yes
+  when: skip_mn_download != "True"
+
+- name: "Unpack TS zip"
+  command: unzip -o {{ path_to_latest }}/ts_archive.zip -d {{ path_to_latest }}
+  when: skip_ts_download != "True"
+
+- name: "gunzip TS vmdk"
+  shell: gzip -d {{ ts_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_ts_download != "True"
+
+- name: "Unpack DK zip"
+  command: unzip -o {{ path_to_latest }}/dk_archive.zip -d {{ path_to_latest }}
+  when: skip_dk_download != "True"
+
+- name: "gunzip DK vmdk"
+  shell: gzip -d {{ dk_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_dk_download != "True"
+
+- name: "Unpack DDC zip"
+  command: unzip -o {{ path_to_latest }}/ddc_archive.zip -d {{ path_to_latest }}
+  when: skip_ddc_download != "True"
+
+- name: "gunzip DDC vmdk"
+  shell: gzip -d {{ ddc_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_ddc_download != "True"
+
+- name: "Unpack MON zip"
+  command: unzip -o {{ path_to_latest }}/mon_archive.zip -d {{ path_to_latest }}
+  when: skip_mon_download != "True"
+
+- name: "gunzip MON vmdk"
+  shell: gzip -d {{ mon_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_mon_download != "True"
+
+- name: "Unpack VOM zip"
+  command: unzip -o {{ path_to_latest }}/vom_archive.zip -d {{ path_to_latest }}
+  when: skip_vom_download != "True"
+
+- name: "gunzip VOM vmdk"
+  shell: gzip -d {{ vom_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_vom_download != "True"
+
+- name: "Unpack SLB zip"
+  command: unzip -o {{ path_to_latest }}/slb_archive.zip -d {{ path_to_latest }}
+  when: skip_slb_download != "True"
+
+- name: "gunzip SLB vmdk"
+  shell: gzip -d {{ slb_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_slb_download != "True"
+
+- name: "Unpack CIM zip"
+  command: unzip -o {{ path_to_latest }}/cim_archive.zip -d {{ path_to_latest }}
+  ignore_errors: yes
+  when: skip_cim_download != "True"
+
+- name: "gunzip CIM vmdk"
+  shell: gzip -d {{ cim_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_cim_download != "True"
+
+- name: "Unpack JEOS zip"
+  command: unzip -o {{ path_to_latest }}/jeos_archive.zip -d {{ path_to_latest }}
+  ignore_errors: yes
+  when: skip_jeos_download != "True"
+
+- name: "gunzip JEOS vmdk"
+  shell: gzip -d {{ jeos_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_jeos_download != "True"
+
+- name: "Unpack TOOLS zip"
+  command: unzip -o {{ path_to_latest }}/tools_archive.zip -d {{ path_to_latest }}
+  ignore_errors: yes
+  when: skip_tools_download != "True"
+
+- name: "gunzip TOOLS vmdk"
+  shell: gzip -d {{ tools_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_tools_download != "True"
+
+- name: "Unpack CUSTOM zip"
+  command: unzip -o {{ path_to_latest }}/custom_archive.zip -d {{ path_to_latest }}
+  ignore_errors: yes
+  when: skip_custom_download != "True"
+
+- name: "gunzip CUSTOM vmdk"
+  shell: gzip -d {{ custom_vmdk }}.gz
+  ignore_errors: yes
+  when: skip_custom_download != "True"
+
+- name: "remove .iso files"
+  shell: rm -f {{ path_to_latest }}/archive/*.iso
+#  shell: rm -f {{ path_to_latest }}/archive/*.qcow2
+  ignore_errors: yes
+  when: clean_after_download == "True"
+  
+
+
+
+

@@ -1,0 +1,151 @@
+##############MSP VM {{ os_stackname }}-{{ vm_name_deploy }} ################################
+   oam_port_{{ vm_name_deploy }}:
+     type: {{ os_neutron_port_type }}
+     properties:
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+         network_id: { get_param: oam_net_id }
+{% else %}
+{% if hostvars['oam_net_id']['filename'] != "" %}
+         network_id: {{ hostvars['oam_net_id']['filename'] }}
+{% else %}
+         network_id: "oam_net_id"
+{% endif %}
+{% endif %}
+{% else %}
+         network_id: { get_resource: oam_network }
+{% endif %}
+         fixed_ips:
+           - ip_address: {{ os_mn_oam_ip }}
+
+   internal_port_{{ vm_name_deploy }}:
+     type: {{ os_neutron_port_type }}
+     properties:
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+         network_id: { get_param: internal_net_id }
+{% else %}
+{% if hostvars['internal_net_id']['filename'] != "" %}
+         network_id: {{ hostvars['internal_net_id']['filename'] }}
+{% else %}
+         network_id: "internal_net_id"
+{% endif %}
+{% endif %}
+{% else %}
+{% if managed_ips | default(False) | bool == True %}
+         network_id: { get_resource: internal_network }
+{% else %}
+         network_id: { get_attr: [internal_network, my_net_id] }
+{% endif %}
+{% endif %}
+         fixed_ips:
+           - ip_address: {{ os_msa_ipaddr }}
+
+   root_volume_{{ vm_name_deploy }}:
+     type: {{ os_cinder_volume_type }}
+     properties:
+         name: root_{{ vm_name_deploy }}
+         size:  {{ os_mn_vol_root_size }}
+{% if manage_templates | default("False") == "True" %}
+         source_volid: {{ hostvars[vm_type]['source_volid'] }}
+{% else %}
+         image: {{ hostvars[vm_type]['filename'] }}
+{% endif %}
+
+   data_volume_{{ vm_name_deploy }}:
+     type: {{ os_cinder_volume_type }}
+     properties:
+        size:  {{ os_mn_vol_data_size }}
+        name: data_{{ vm_name_deploy }}
+{% if system_versiontag_old is defined and system_versiontag != system_versiontag_old %}
+{% if use_heat_env_file | default('False') == 'True' %}
+        source_volid: { get_param: data_vol_id }
+{% else %}
+{% if hostvars['data_vol']['filename'] != "" %}
+        source_volid: {{ hostvars['data_vol']['filename'] }}
+{% else %}
+        source_volid: "data_vol_id"
+{% endif %}
+{% endif %}
+{% endif %}
+
+   arch_volume_{{ vm_name_deploy }}:
+     type: {{ os_cinder_volume_type }}
+     properties:
+        size: {{ os_mn_vol_arch_size }}
+        name: arch_{{ vm_name_deploy }}
+{% if system_versiontag_old is defined and system_versiontag != system_versiontag_old %}
+{% if use_heat_env_file | default('False') == 'True' %}
+        source_volid: { get_param: arch_vol_id }
+{% else %}
+{% if hostvars['arch_vol']['filename'] != "" %}
+        source_volid: {{ hostvars['arch_vol']['filename'] }}
+{% else %}
+        source_volid: "arch_vol_id"
+{% endif %}
+{% endif %}
+{% endif %}
+
+   backup_volume_{{ vm_name_deploy }}:
+     type: {{ os_cinder_volume_type }}
+     properties:
+        size: {{ os_mn_vol_backup_size }}
+        name: backup_{{ vm_name_deploy }}
+{% if system_versiontag_old is defined and system_versiontag != system_versiontag_old %}
+{% if use_heat_env_file | default('False') == 'True' %}
+        source_volid: { get_param: backup_vol_id }
+{% else %}
+{% if hostvars['backup_vol']['filename'] != "" %}
+        source_volid: {{ hostvars['backup_vol']['filename'] }}
+{% else %}
+        source_volid: "backup_vol_id"
+{% endif %}
+{% endif %}
+{% endif %}
+
+   misc_volume_{{ vm_name_deploy }}:
+     type: {{ os_cinder_volume_type }}
+     properties:
+        size: {{ os_mn_vol_misc_size }}
+        name: misc_{{ vm_name_deploy }}
+{% if system_versiontag_old is defined and system_versiontag != system_versiontag_old %}
+{% if use_heat_env_file | default('False') == 'True' %}
+        source_volid: { get_param: misc_vol_id }
+{% else %}
+{% if hostvars['misc_vol']['filename'] != "" %}
+        source_volid: {{ hostvars['misc_vol']['filename'] }}
+{% else %}
+        source_volid: "misc_vol_id"
+{% endif %}
+{% endif %}
+{% endif %}
+
+   mn_instance_{{ vm_name_deploy }}:
+    type: OS::Nova::Server
+    properties:
+      name: {{ os_stackname }}-{{ vm_name }}
+      config_drive: "True"
+      block_device_mapping: [{"volume_id": { get_resource:  root_volume_{{ vm_name_deploy }} }, "device_name": vda}, {"volume_id": { get_resource:  data_volume_{{ vm_name_deploy }} }, "device_name": vdb},{"volume_id": { get_resource:   arch_volume_{{ vm_name_deploy }} }, "device_name": vdc},{"volume_id": { get_resource:  backup_volume_{{ vm_name_deploy }} }, "device_name": vdd},{"volume_id": { get_resource:  misc_volume_{{ vm_name_deploy }} }, "device_name": vde}]
+      user_data_format: RAW
+      user_data:
+        get_file: "{{ output_folder_remote }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ mn_config_type }}/user-data"
+      image: {{ hostvars[vm_type]['filename'] }}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+      flavor: { get_param: mn_flavor_id }
+{% else %}
+{% if hostvars['mn_flavor_id']['filename'] != "" %}
+      flavor: {{ hostvars['mn_flavor_id']['filename'] }}
+{% else %}
+      flavor: "mn_flavor_id"
+{% endif %}
+{% endif %}
+{% else %}
+      flavor: {get_attr: [mn_flavor, my_flavor_id]}
+{% endif %}
+      availability_zone: "{{ mn_in_zone }}"
+      metadata:
+         "evacuation_policy": "Evacuation"
+      networks: [{port: { get_resource: oam_port_{{ vm_name_deploy }} } },{port: { get_resource: internal_port_{{ vm_name_deploy }} }} ]
+ 
+

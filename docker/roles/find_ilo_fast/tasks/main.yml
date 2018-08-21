@@ -1,0 +1,13 @@
+---
+# tasks file for find_ilo_fast
+
+- name: Find the iLO
+  find_moonshot:
+    subnet: "{{network}}"
+  register: ilo_address
+
+- set_fact:
+    ilo_address: "{{ilo_address.moonshot_address}}"
+
+- name: Moonshot found at address
+  debug: var=ilo_address

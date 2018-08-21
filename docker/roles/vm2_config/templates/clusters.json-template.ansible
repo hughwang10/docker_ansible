@@ -1,0 +1,28 @@
+{% macro cluster_definition(cluster, displayname, description, indent, last) %}
+{{ indent }}{
+{{ indent }}  "groupname" : "{{ cluster }}",
+{{ indent }}  "displayname" : "{{ displayname }}",
+{{ indent }}  "description" : "{{ description }}"
+{{ indent }}}{% if not last %},{% endif %}{% endmacro %}
+[
+{% if clusters is defined %}
+{% for rootcluster in clusters.groups | default([]) %}
+  {
+    "parent" : "{{ clusters.rootname }}",
+    "groups" : [
+{{ cluster_definition( rootcluster.groupname , rootcluster.displayname, rootcluster.description, "      ", True ) }}
+    ]
+  }{% if rootcluster.groups is defined %},
+  { 
+    "parent" : "{{ rootcluster.groupname }}",
+    "groups" : [
+{% endif %}{% for cluster in rootcluster.groups | default([]) %}
+{{ cluster_definition(cluster.groupname, cluster.displayname, cluster.description, "      ", loop.last ) }}
+{% if loop.last %}
+    ]
+  }{% endif %}{% if not loop.last %}{% endif %}{% endfor %}{% if not loop.last %},
+{% endif %}{% endfor %}
+
+]
+{% endif %}
+

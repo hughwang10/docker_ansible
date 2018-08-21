@@ -1,0 +1,158 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+allow_duplicates: yes
+dependencies:
+- { role: vm2_config, storage_type: VBOX }
+- { role: vm_deploy_vbox, vm_vmdk: "{{ vm_type_resources[vm_type].img_file_pattern }}", resource_mem_vm: "{{ vm_type_resources[vm_type].mem }}", resource_cpu_vm: "{{ vm_type_resources[vm_type].cpu }}", nic1_enable: "{{ vm_type_resources[vm_type].nic_enable[0] | default(False) | bool }}", nic2_enable: "{{ vm_type_resources[vm_type].nic_enable[1] | default(False) | bool }}", nic3_enable: "{{ vm_type_resources[vm_type].nic_enable[2] | default(False) | bool }}", nic4_enable: "{{ vm_type_resources[vm_type].nic_enable[3] | default(False) | bool }}", nic5_enable: "{{ vm_type_resources[vm_type].nic_enable[4] | default(False) | bool }}", nic6_enable: "{{ vm_type_resources[vm_type].nic_enable[5] | default(False) | bool }}", rootdisk_size: "{{ vm_type_resources[vm_type].rootdisk_size }}", when: vm_type in all_vm_types | default() }
+
+- { role: vm_deploy_vbox, vm_vmdk: "{{ std_vmdk | default(auto_std_vmdk) }}", resource_mem_vm: "{{ resource_mem_std | default(resource_mem_std_i) }}", resource_cpu_vm: "{{ resource_cpu_std | default(resource_cpu_std_i) }}", nic1_enable: True, nic2_enable: False, rootdisk_size: "{{ std_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type not in all_vm_types }
+
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ l4sf_vmdk | default(l4sf_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_l4sf | default(resource_mem_l4sf_i) }}", resource_cpu_vm: "{{ resource_cpu_l4sf | default(resource_cpu_l4sf_i) }}", nic1_enable: True, nic2_enable: True, nic3_enable: True, rootdisk_size: "{{ l4sf_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="l4sf"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ cf_vmdk | default(cf_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_cf | default(resource_mem_cf_i) }}", resource_cpu_vm: "{{ resource_cpu_cf | default(resource_cpu_cf_i) }}", nic1_enable: True, nic2_enable: True, rootdisk_size: "{{ cf_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="cf"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ mn_vmdk | default(mn_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_mn | default(resource_mem_mn_i) }}", resource_cpu_vm: "{{ resource_cpu_mn | default(resource_cpu_mn_i) }}", nic1_enable: True, nic2_enable: True, rootdisk_size: "{{ mn_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="mn"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ ts_vmdk | default(ts_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_ts | default(resource_mem_ts_i) }}", resource_cpu_vm: "{{ resource_cpu_ts | default(resource_cpu_ts_i) }}", nic1_enable: True, nic2_enable: True, nic3_enable: True, nic4_enable: True, rootdisk_size: "{{ ts_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="ts"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ vm_type_resources[vm_type].img_file_pattern }}", resource_mem_vm: "{{ vm_type_resources[vm_type].mem }}", resource_cpu_vm: "{{ vm_type_resources[vm_type].cpu }}", nic1_enable: "{{ vm_type_resources[vm_type].nic_enable[0] | default(False) | bool }}", nic2_enable: "{{ vm_type_resources[vm_type].nic_enable[1] | default(False) | bool }}", nic3_enable: "{{ vm_type_resources[vm_type].nic_enable[2] | default(False) | bool }}", nic4_enable: "{{ vm_type_resources[vm_type].nic_enable[3] | default(False) | bool }}", nic5_enable: "{{ vm_type_resources[vm_type].nic_enable[4] | default(False) | bool }}", nic6_enable: "{{ vm_type_resources[vm_type].nic_enable[5] | default(False) | bool }}", rootdisk_size: "{{ vm_type_resources[vm_type].rootdisk_size }}", when: vm_type=="ts"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ slb_vmdk | default(slb_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_slb | default(resource_mem_slb_i) }}", resource_cpu_vm: "{{ resource_cpu_slb | default(resource_cpu_slb_i) }}", nic1_enable: True, nic2_enable: True, nic3_enable: True, nic4_enable: True, nic5_enable: True, nic6_enable: True, rootdisk_size: "{{ slb_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="slb"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ mon_vmdk | default(mon_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_mon | default(resource_mem_mon_i) }}", resource_cpu_vm: "{{ resource_cpu_mon | default(resource_cpu_mon_i) }}", nic1_enable: True, nic2_enable: True, rootdisk_size: "{{ mon_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="mon"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ ddc_vmdk | default(ddc_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_ddc | default(resource_mem_ddc_i) }}", resource_cpu_vm: "{{ resource_cpu_ddc | default(resource_cpu_ddc_i) }}", nic1_enable: True, nic2_enable: True, nic3_enable: True, rootdisk_size: "{{ ddc_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="ddc"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ vom_vmdk | default(vom_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_vom | default(resource_mem_vom_i) }}", resource_cpu_vm: "{{ resource_cpu_vom | default(resource_cpu_vom_i) }}", nic1_enable: True, nic2_enable: True, rootdisk_size: "{{ vom_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="vom"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ da_vmdk | default(da_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_da | default(resource_mem_da_i) }}", resource_cpu_vm: "{{ resource_cpu_da | default(resource_cpu_da_i) }}", nic1_enable: True, nic2_enable: True, nic3_enable: True, rootdisk_size: "{{ da_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="da"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ cim_vmdk | default(cim_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_cim | default(resource_mem_cim_i) }}", resource_cpu_vm: "{{ resource_cpu_cim | default(resource_cpu_cim_i) }}", nic1_enable: True, nic2_enable: True, nic3_enable: True, rootdisk_size: "{{ cim_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="cim"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ jeos_vmdk | default(jeos_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_jeos | default(resource_mem_jeos_i) }}", resource_cpu_vm: "{{ resource_cpu_jeos | default(resource_cpu_jeos_i) }}", nic1_enable: True, nic2_enable: True, rootdisk_size: "{{ jeos_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="jeos"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ tools_vmdk | default(tools_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_tools | default(resource_mem_tools_i) }}", resource_cpu_vm: "{{ resource_cpu_tools | default(resource_cpu_tools_i) }}", nic1_enable: True, nic2_enable: True, rootdisk_size: "{{ tools_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="tools"}
+#- { role: vm_deploy_vbox, vm_vmdk: "{{ custom_vmdk | default(custom_vmdk_i) }}", resource_mem_vm: "{{ resource_mem_custom | default(resource_mem_custom_i) }}", resource_cpu_vm: "{{ resource_cpu_custom | default(resource_cpu_custom_i) }}", nic1_enable: True, nic2_enable: True, rootdisk_size: "{{ custom_rootdisk_size | default(default_rootdisk_size) }}", when: vm_type=="custom"}
+
+galaxy_info:
+  author: your name
+  description: 
+  company: your company (optional)
+  # Some suggested licenses:
+  # - BSD (default)
+  # - MIT
+  # - GPLv2
+  # - GPLv3
+  # - Apache
+  # - CC-BY
+  license: license (GPLv2, CC-BY, etc)
+  min_ansible_version: 1.2
+  #
+  # Below are all platforms currently available. Just uncomment
+  # the ones that apply to your role. If you don't see your 
+  # platform on this list, let us know and we'll get it added!
+  #
+  #platforms:
+  #- name: EL
+  #  versions:
+  #  - all
+  #  - 5
+  #  - 6
+  #  - 7
+  #- name: GenericUNIX
+  #  versions:
+  #  - all
+  #  - any
+  #- name: Fedora
+  #  versions:
+  #  - all
+  #  - 16
+  #  - 17
+  #  - 18
+  #  - 19
+  #  - 20
+  #- name: opensuse
+  #  versions:
+  #  - all
+  #  - 12.1
+  #  - 12.2
+  #  - 12.3
+  #  - 13.1
+  #  - 13.2
+  #- name: Amazon
+  #  versions:
+  #  - all
+  #  - 2013.03
+  #  - 2013.09
+  #- name: GenericBSD
+  #  versions:
+  #  - all
+  #  - any
+  #- name: FreeBSD
+  #  versions:
+  #  - all
+  #  - 8.0
+  #  - 8.1
+  #  - 8.2
+  #  - 8.3
+  #  - 8.4
+  #  - 9.0
+  #  - 9.1
+  #  - 9.1
+  #  - 9.2
+  #- name: Ubuntu
+  #  versions:
+  #  - all
+  #  - lucid
+  #  - maverick
+  #  - natty
+  #  - oneiric
+  #  - precise
+  #  - quantal
+  #  - raring
+  #  - saucy
+  #  - trusty
+  #- name: SLES
+  #  versions:
+  #  - all
+  #  - 10SP3
+  #  - 10SP4
+  #  - 11
+  #  - 11SP1
+  #  - 11SP2
+  #  - 11SP3
+  #- name: GenericLinux
+  #  versions:
+  #  - all
+  #  - any
+  #- name: Debian
+  #  versions:
+  #  - all
+  #  - etch
+  #  - lenny
+  #  - squeeze
+  #  - wheezy
+  #
+  # Below are all categories currently available. Just as with
+  # the platforms above, uncomment those that apply to your role.
+  #
+  #categories:
+  #- cloud
+  #- cloud:ec2
+  #- cloud:gce
+  #- cloud:rax
+  #- clustering
+  #- database
+  #- database:nosql
+  #- database:sql
+  #- development
+  #- monitoring
+  #- networking
+  #- packaging
+  #- system
+  #- web
+#dependencies: []
+  # List your role dependencies here, one per line. Only
+  # dependencies available via galaxy should be listed here.
+  # Be sure to remove the '[]' above if you add dependencies
+  # to this list.
+  

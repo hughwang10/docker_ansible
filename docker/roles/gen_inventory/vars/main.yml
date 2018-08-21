@@ -1,0 +1,17 @@
+---
+# vars file for gen_inventory
+start_ip_i: "{{ start_ip | default(2) }}"
+oam_start_ip_i: "{{ oam_start_ip_offset | default(oam_start_ip | default(start_ip_i)) }}"
+internal_start_ip_i: "{{ internal_start_ip_offset | default(internal_start_ip | default(start_ip_i)) }}"
+internet_start_ip_i: "{{ internet_start_ip_offset | default(internet_start_ip | default(start_ip_i)) }}"
+access_start_ip_i: "{{ access_start_ip_offset | default(access_start_ip | default(start_ip_i)) }}" 
+internetingress_start_ip_i: "{{ internetingress_start_ip_offset | default(internetingress_start_ip | default(start_ip_i)) }}"
+accessingress_start_ip_i: "{{ accessingress_start_ip_offset | default(accessingress_start_ip | default(start_ip_i)) }}"
+controlplanesig_start_ip_i: "{{ controlplanesig_start_ip_offset | default(controlplanesig_start_ip | default(start_ip_i)) }}" 
+access_start_ipv6_i: "{{ access_start_ipv6_offset | default(access_start_ipv6 | default(start_ipv6)) }}" 
+internet_start_ipv6_i: "{{ internet_start_ipv6_offset | default(internet_start_ipv6 | default(start_ipv6)) }}" 
+accessingress_start_ipv6_i: "{{ accessingress_start_ipv6_offset | default(accessingress_start_ipv6 | default(start_ipv6)) }}" 
+internetingress_start_ipv6_i: "{{ internetingress_start_ipv6_offset | default(internetingress_start_ipv6 | default(start_ipv6)) }}" 
+controlplanesig_start_ipv6_i: "{{ controlplanesig_start_ipv6_offset | default(controlplanesig_start_ipv6 | default(start_ipv6)) }}" 
+custom1_network_start_ip_i: "{{ custom1_network_start_ip_offset | default(custom1_network_start_ip) | default(start_ip_i) }}" 
+

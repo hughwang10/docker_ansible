@@ -1,0 +1,8 @@
+[images]
+{% for host in (groups['images'] | default([])) %}
+{{ hostvars[host]['filename'] }} #{{ host }}
+{% endfor %}
+
+
+
+

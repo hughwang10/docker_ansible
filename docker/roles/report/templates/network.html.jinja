@@ -1,0 +1,18 @@
+<div class="row">
+  <div class="col-md-12">
+    {% if link_throughput_output.failed | default(False) == False %}
+    <img width="100%" src="data:image/png;base64,{{link_throughput_output.results.bad_link_image}}"/>
+    {% else %}
+    <h3 class="text-center">Network map unavailable</h3>
+    <br/>
+    {% endif %}
+  </div>
+  <div class="col-md-12">
+    {% if link_throughput_output.failed | default(False) == False %}
+    <img width="100%" src="data:image/png;base64,{{link_throughput_output.results.low_throughput_image}}"/>
+    {% else %}
+    <h3 class="text-center">Network map unavailable</h3>
+    <br/>
+    {% endif %}
+  </div>
+</div>

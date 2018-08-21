@@ -1,0 +1,18 @@
+DEFAULT {{item.default}} 
+
+SERIAL 0 9600
+CONSOLE 0
+
+LABEL TOOLS 
+    kernel boot/linux
+    append initrd=boot/initrd-tools vga=normal ramdisk_size=512000 ramdisk_blocksize=4096 kiwiserver=192.168.10.51 pxe=1 console=ttyS0,9600n8
+    IPAPPEND 2
+
+LABEL TS 
+    kernel boot/linux
+    append initrd=boot/initrd-ts vga=normal ramdisk_size=512000 ramdisk_blocksize=4096 kiwiserver=192.168.10.51 pxe=1 console=ttyS0,9600n8
+    IPAPPEND 2
+
+LABEL Local-Boot
+    localboot 0
+

@@ -1,0 +1,237 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm_deploy_vsphere_prepare
+- debug: msg="{{ output_folder_remote | default(output_folder) }}"
+
+- name: Creates  VM  VM disk directory !
+  file: path={{ output_folder_remote }}/vm state=directory
+  register: result1
+  ignore_errors: True
+
+- name: Creates  VM  VM disk directory with sudo !
+  file: path={{ output_folder_remote }}/vm state=directory
+  become: yes
+  become_method: sudo 
+  when: result1 | failed
+
+- name: Changes VM  VM disk directory !
+  action: shell chown -R {{ remote_user }} {{ output_folder_remote + '/../') | realpath }} 
+  become: yes
+  become_method: sudo 
+  when: result1 | failed
+
+- name: "Find the latest vmdk"
+  local_action: shell ls -t {{ vm_vmdk }} | head -1
+  register: cmd1_result 
+
+- debug: msg="{{ cmd1_result }}"
+
+- name: "Find the latest vmdk, normalize the path"
+  local_action: shell readlink -m {{ cmd1_result.stdout }}
+  register: cmd_result
+
+- name: "Assign var ..."
+  set_fact: file_result={{ cmd_result.stdout | basename }}
+
+- debug: msg="{{ output_folder_remote }}/vm/{{ file_result }}"
+
+- name: "Search Glance to see if the image file exists in Glance or not"
+  action: shell glance image-list | grep {{ file_result }}
+  register: cmd2_result
+  when: cee_dryrun | default('False') == 'False'
+  ignore_errors: True
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- debug: msg=" result is {{ cmd2_result.stdout }}"
+  when: cee_dryrun | default('False') == 'False'
+
+- name: "Assign vars.."
+  set_fact: upload_image=False
+
+- name: "Assign search result"
+  set_fact: upload_image=True
+  when: (cmd2_result | failed) and (cee_dryrun | default('False') == 'False')
+
+- debug: msg=" Image file does not exist in Glance? {{ upload_image }}"
+  when: action == "deploy_openstack"  
+
+- name: "Copy '{{ cmd_result.stdout }}' to deploy host"
+  action: copy src={{ cmd_result.stdout }} dest="{{ output_folder_remote }}/vm/{{ file_result }}"
+  when: (vm_disk_nocopy | default(False)) != True and (action == "deploy_vsphere" or ((action == "deploy_openstack") and (upload_image == True))) and (cee_dryrun | default('False') == 'False') 
+
+- name: "Openstack: Upload Images to Glance..."
+  action: glance_image
+                login_username={{ os_username }}
+                login_password={{ os_password }}
+                login_tenant_name={{ os_tenant }}
+                auth_url={{ os_authurl }}
+                container_format=bare
+                disk_format=qcow2
+                timeout=180
+                state=present
+                name="{{ file_result }}"
+                file="{{ output_folder_remote }}/vm/{{ file_result }}"
+  when: (action == "deploy_openstack") and (upload_image == True) and (cee_dryrun | default('False') == 'False')
+
+- debug: msg="Upload {{ output_folder_remote }}/vm/{{ file_result }}"
+  when: (action == "deploy_openstack") and (upload_image == True)
+
+- debug: msg="As {{ file_result }}"
+  when: (action == "deploy_openstack") and (upload_image == True)
+
+- debug: msg="Add image file {{ file_result }} for VM type {{ vm_type }} to inventory"
+
+- name: "add image file into inventory"
+  local_action: add_host name={{ vm_type }} groups=images filename={{ file_result }} 
+
+- debug: msg="Create root volume template for vm type {{ vm_type }}"
+  when: manage_templates | default("False") == "True"
+
+- name: "Check if root_{{ vm_type }}_template_{{ system_versiontag }} already exist"
+  action: shell cinder list |grep root_{{ vm_type }}_template_{{ system_versiontag }}
+  register: root_template_exist
+  ignore_errors: yes 
+  when: manage_templates | default("False") == "True" 
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Remove the existing  root_{{ vm_type }}_template_{{ system_versiontag }} if needed"
+  action: shell cinder delete root_{{ vm_type }}_template_{{ system_versiontag }}
+  when: (manage_templates | default("False") == "True") and ( root_template_exist.stdout != "") and ( remove_exist_template | default("False") == "True" ) 
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait till the volume is removed successfully"
+  action: shell cinder list |grep root_{{ vm_type }}_template_{{ system_versiontag }}
+  when: (manage_templates | default("False") == "True") and ( root_template_exist.stdout != "") and ( remove_exist_template | default("False") == "True" )
+  register: result
+  until: result.stdout == ""
+  retries: 1000
+  delay:  5
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Search Glance to get image_id for {{ file_result }}"
+  action: shell glance image-list | grep {{ file_result }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'   
+  register: glance_image_id_result
+  when: (manage_templates | default("False") == "True") 
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- set_fact: root_vol_template_size={{ os_mn_vol_root_size }} 
+  when: vm_type == "mn" and (manage_templates | default("False") == "True")
+
+- set_fact: root_vol_template_size={{ os_ts_vol_root_size }}
+  when: vm_type == "ts" and (manage_templates | default("False") == "True")
+
+- set_fact: root_vol_template_size={{ os_slb_vol_root_size }}
+  when: vm_type == "slb" and (manage_templates | default("False") == "True")
+
+- set_fact: root_vol_template_size={{ os_ddc_vol_root_size }}
+  when: vm_type == "ddc" and (manage_templates | default("False") == "True")
+
+- set_fact: root_vol_template_size={{ os_mon_vol_root_size }}
+  when: vm_type == "mon" and (manage_templates | default("False") == "True")
+
+- set_fact: root_vol_template_size={{ os_da_vol_root_size }}
+  when: vm_type == "da" and (manage_templates | default("False") == "True")
+
+- set_fact: root_vol_template_size={{ os_vom_vol_root_size }}
+  when: vm_type == "vom" and (manage_templates | default("False") == "True")
+
+- set_fact: root_vol_template_size={{ os_cim_vol_root_size }}
+  when: vm_type == "cim" and (manage_templates | default("False") == "True")
+
+- set_fact: root_vol_template_size={{ os_custom_vol_root_size }}
+  when: vm_type == "custom" and (manage_templates | default("False") == "True")
+
+- set_fact: root_vol_template_size={{ os_tools_vol_root_size }}
+  when: vm_type == "tools" and (manage_templates | default("False") == "True") 
+ 
+- name: "Create root_{{ vm_type }}_template_{{ system_versiontag }} based on the glance image_id"
+  action: shell cinder create --image-id {{ glance_image_id_result.stdout }} --display-name root_{{ vm_type }}_template_{{ system_versiontag }} {{ root_vol_template_size }}
+  when: (manage_templates | default("False") == "True") and ((root_template_exist.stdout == "") or (( root_template_exist.stdout != "") and ( remove_exist_template | default("False") == "True"))) 
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait till this root_{{ vm_type }}_template_{{ system_versiontag }} is ready"
+  action: shell cinder list |grep root_{{ vm_type }}_template_{{ system_versiontag }} |grep available | awk -F '|' '{print $2}' | sed 's/^[ ]*//' 
+  when: (manage_templates | default("False") == "True")
+  register: root_vol_id_result
+  until: root_vol_id_result.stdout != ""
+  retries: 1000
+  delay:  5
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+  
+- debug: msg=" vol name root_{{ vm_type }}_template_{{ system_versiontag }} with id {{ root_vol_id_result.stdout }}, has been created based on glance image {{ file_result }}"
+  when: manage_templates | default("False") == "True"
+
+- name: "Add root_{{ vm_type }}_template_{{ system_versiontag }} with id {{ root_vol_id_result.stdout }} to inventory"
+  local_action: add_host name="{{ vm_type }}" groups=root_vol_id source_volid={{ root_vol_id_result.stdout }} 
+  when: manage_templates | default("False") == "True"
+
+- name: "Create diretory to store generated hot template files"
+  action: file path="{{ output_folder_remote }}/heat/temp" state=directory
+  ignore_errors: yes
+  when: action == "deploy_openstack"
+
+#- name: "Clean the Hot template dir"
+#  action: shell rm {{ output_folder_remote }}/heat/temp/*
+#  ignore_errors: yes
+#  when: action == "deploy_openstack" and vm_type == "mn" and ( expand_site | default('False') == 'False' )
+
+#- name: "Create VM template files backup dir"
+#  action: shell mkdir {{ output_folder_remote }}/heat/temp_bak
+#  ignore_errors: yes
+#  when: action == "deploy_openstack" and vm_type == "mn" and ( expand_site | default('False') == 'True' )
+
+#- name: "Clean the template backup dir"
+#  action: shell rm {{ output_folder_remote }}/heat/temp_bak/*
+#  ignore_errors: yes
+#  when: action == "deploy_openstack" and vm_type =="mn" and ( expand_site | default('False') == 'True' )
+
+#- name: "Backup original VM template files for expand_site mode"
+#  action: shell cp {{ output_folder_remote }}/heat/temp/*.yaml  {{ output_folder_remote }}/heat/temp_bak/
+#  ignore_errors: yes
+#  when: action == "deploy_openstack" and vm_type == "mn" and ( expand_site | default('False') == 'True' )
+
+- name: "Remove file from deploy host after uploading to target system"
+  file: name={{ output_folder_remote }}/vm/{{ file_result }} state=absent
+  when: (vm_disk_nocopy | default(False)) != True and (action == "deploy_openstack") and (cee_dryrun | default('False') == 'False')
+
+
+

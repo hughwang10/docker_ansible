@@ -1,0 +1,71 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for inv_gen
+
+- name: Creates inventory directory
+  local_action: file path={{ output_folder }}/inventory state=directory
+
+- name: "Generate images file"
+  local_action: template src=images.template dest={{ output_folder }}/inventory/images_all mode=0440
+
+- name: "Generate hosts_all file"
+  local_action: template src=hosts.template dest={{ output_folder }}/inventory/hosts_all mode=0440
+
+- name: "Generate hosts_by_type file"
+  local_action: template src=hosts_by_type.template dest={{ output_folder }}/inventory/hosts_by_type mode=0440
+
+- name: "Generate oam_all.yml"
+  local_action: template src=oam_all.yml.template dest={{ output_folder }}/inventory/oam_all.yml mode=0440
+
+- name: "Generate hosts_vmnames.yml"
+  local_action: template src=hosts_vmnames.yml.template dest={{ output_folder }}/inventory/hosts_vmnames.yml mode=0440
+  when: action != "deploy_openstack"
+
+- name: "Generate internal_all.yml"
+  local_action: template src=internal_all.yml.template dest={{ output_folder }}/inventory/internal_all.yml mode=0440
+
+- name: "Generate access_all.yml"
+  local_action: template src=access_all.yml.template dest={{ output_folder }}/inventory/access_all.yml mode=0440
+
+- name: "Generate internet_all.yml"
+  local_action: template src=internet_all.yml.template dest={{ output_folder }}/inventory/internet_all.yml mode=0440
+
+- name: "Generate access_ingress_all.yml"
+  local_action: template src=access_ingress_all.yml.template dest={{ output_folder }}/inventory/access_ingress_all.yml mode=0440
+
+- name: "Generate internet_ingress_all.yml"
+  local_action: template src=internet_ingress_all.yml.template dest={{ output_folder }}/inventory/internet_ingress_all.yml mode=0440
+
+- name: "Generate controlplanesig_all.yml"
+  local_action: template src=controlplanesig_all.yml.template dest={{ output_folder }}/inventory/controlplanesig_all.yml mode=0440
+  when: controlplanesig_name is defined and controlplanesig_network is defined
+
+- name: "Move old hosts_names file"
+  local_action: command mv {{ output_folder }}/inventory/hosts_names.yml {{ output_folder }}/inventory/hosts_names-{{ deployment_index_h | default(1) }}.yml
+  ignore_errors: yes
+  when: system_upgrade | default('False') == 'True'
+
+- name: "Generate hosts_names file"
+  local_action: template src=hosts_names.template dest={{ output_folder }}/inventory/hosts_names.yml mode=0440
+
+- name: "Move old UUID file"
+  local_action: command mv {{ output_folder }}/inventory/uuid.yml {{ output_folder }}/inventory/uuid-{{ deployment_index_u | default(1) }}.yml
+  ignore_errors: yes
+  when: action == "deploy_vbox" and system_upgrade | default('False') == 'True'
+
+- name: "Generate UUID file"
+  local_action: template src=uuid.template dest={{ output_folder }}/inventory/uuid.yml mode=0440
+  when: action == "deploy_vbox" or groups['vbox'] is defined
+
+- debug: msg="Index = {{ debug_index }} {{ deployment_index_prev_h }}"

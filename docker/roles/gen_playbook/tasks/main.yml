@@ -1,0 +1,27 @@
+---
+# tasks file for gen_playbook
+- name: Generate the yml
+  gen_playbook:
+    default_parameters: "{{default_parameters}}"
+    tests: "{{tests}}"
+    networks: "{{networks}}"
+    vm_specs: "{{vm_specs}}"
+    hostvars: "{{hostvars}}"
+  register: playbook 
+
+- name: Generate the estimated time string
+  set_fact:
+   time_estimation: "The estimated runtime is around {{playbook.runtime}} minutes {{inaccurate_txt}}"
+
+- name: Include inside the stemplate
+  template: src=miit-nv.yml dest=./test-playbook.yml
+
+- name: Replace the variable jinja statemen
+  replace: dest=./test-playbook.yml regexp='%({)' replace='{\1'
+
+- name: Replace the variable jinja statemen
+  replace: dest=./test-playbook.yml regexp='(})%' replace='\1}'
+
+- name: Estimated runtime
+  debug:
+    msg: "{{time_estimation}}" 

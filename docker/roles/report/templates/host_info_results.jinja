@@ -1,0 +1,52 @@
+{% from "macros.jinja" import line with context %}
+
+{% macro host_info_results(results) %}
+
+{% for group in results|groupby('_label') %}    
+
+  {% if not group.grouper in ['routing'] %}
+
+    <div class="col-md-6">
+      <h3>{{group.grouper|title}}</h3>
+      <table class="table table-bordered table-striped table-hover nv-table"> 
+        <tbody>
+          {% for name in group.list[0] %}
+            {% if name[0] != '_' %}
+            {% set danger = 'bg-danger' if group.list[0]._success == False and name in group.list[0]._offenders else '' %} 
+              {{line([name, group.list[0][name]], class=danger, id=group.list[0]._id)}}
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+
+  {% elif group.grouper == 'routing' %}
+
+    <div class="col-md-12">
+      <h3>{{group.grouper|title}}</h3>
+
+      {% set danger = 'danger' if group.list[0]._success == False else '' %} 
+
+      <table id="{{group.list[0]._id}}" class="table table-bordered table-striped table-hover nv-table {{danger}}"> 
+        <thead>
+          <tr>
+            <th>Destination</th>
+            <th>Gateway</th>
+            <th>Genmask</th>
+            <th>Flags</th>
+            <th>Metric</th>
+            <th>Ref</th>
+            <th>Use</th>
+            <th>Iface</th>
+          </tr>
+        </thead>
+      <tbody>
+      {% for r in group.list[0].routes %}
+      {{line([r.destination, r.gateway, r.genmask, r.flags, r.metric, r.ref, r.use, r.iface])}}
+      {% endfor %}
+      </tbody>
+      </table>
+  {% endif %}
+  </div>
+{% endfor %}
+
+{% endmacro %}

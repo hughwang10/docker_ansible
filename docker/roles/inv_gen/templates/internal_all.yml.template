@@ -1,0 +1,45 @@
+---
+internal_all_ips:
+{% if deploy_address == 'static' %}
+{% if groups['mn'] is defined %}
+{% for host in groups['mn'] %}
+ - {{ hostvars[host]['int_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['ts'] is defined %}
+{% for host in groups['ts'] %}
+ - {{ hostvars[host]['int_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['dk'] is defined %}
+{% for host in groups['dk'] %}
+ - {{ hostvars[host]['int_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['ddc'] is defined %}
+{% for host in groups['ddc'] %}
+ - {{ hostvars[host]['int_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['mon'] is defined %}
+{% for host in groups['mon'] %}
+ - {{ hostvars[host]['int_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['vom'] is defined %}
+{% for host in groups['vom'] %}
+ - {{ hostvars[host]['int_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['slb'] is defined %}
+{% for host in groups['slb'] %}
+ - {{ hostvars[host]['int_ip'] }}
+{% endfor %}
+{% endif %}
+{% if groups['da'] is defined %}
+{% for host in groups['da'] %}
+ - {{ hostvars[host]['int_ip'] }}
+{% endfor %}
+{% endif %}
+{% endif %}
+

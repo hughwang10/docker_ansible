@@ -1,0 +1,188 @@
+{% macro line(content) -%}
+
+{% for td in content -%}
+{% set escape = '\t\t' if td|string|length < 8 else '\t' %}
+{{td|string + escape }}
+{%- endfor -%} 
+{% endmacro -%}
+
+{# Macros to create section and subsections with increasing section number
+   Kindof a dirty Hack #}
+{% macro start_page(title) -%}
+{% if section.append(1) %}
+{% endif -%}
+
+{% set l = subsection|length %}
+{% for item in range(l) %}
+{% if subsection.pop() %}
+{% endif %}
+{% endfor -%}
+
+{{section|length}}. {{title}}
+===============================================================
+{%- endmacro -%}
+
+{% macro end_page() -%}
+===============================================================
+{%- endmacro -%}
+
+{% set section = [] %}
+{% set subsection = [] -%}
+
+{% macro start_subpage(title) -%}
+ {% if subsection.append(subsection|length) %}
+ {% endif %}
+{{section|length}}-{{subsection|length}}. {{title}}
+---------------------------------------------------------------
+{%- endmacro -%}
+
+{% macro end_subpage() -%}
+---------------------------------------------------------------
+{%- endmacro -%}
+
+{% macro array(lines) -%}
+
+{% for l in lines %}
+{{ line([l.name, l.content]) }}
+{% endfor -%}
+
+{% endmacro -%}
+
+{% macro ping_results(results) -%}
+
+{% for group in results|groupby('tag') %}
+{% set lines = group.list %}
+{{group.grouper|title}}
+-----------------------
+{{line(['Dest', 'Trans', 'Loss', 'Max', 'Min', 'Mdev', 'Avg'])}}
+{% for l in lines %}
+{% if l.rtt is not defined %}
+{{line([l.stdout])}}
+{% elif l.rtt.max is not defined %}
+{{line([l.destination|resolve(ip_register), l.transmitted, l.loss + '%'])}}
+{% else %}
+{{line([l.destination|resolve(ip_register), l.transmitted, l.loss + '%', l.rtt.max, l.rtt.min, l.rtt.mdev, l.rtt.avg])}}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endmacro -%}
+
+{% macro mtr_results(results) %}
+{% for group in results|groupby('tag') %}
+{% set lines = group.list %}
+{{group.grouper|title}}
+-----------------------
+{% for destination in lines %}
+{{line([destination.destination|title])}}
+{{line(['Host', 'Loss', 'Last', 'Worse', 'Jmax', 'Avg', 'Best', 'Sent'])}}
+{% if destination.hubs is defined %}
+{% for l in destination.hubs %}
+{{line([l.host, l.Loss, l.Last, l.Wrst, l.Jmax, l.Avg, l.Best, l.Snt])}}
+{% endfor %} 
+{% else %}
+{{line([destination.message])}}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endmacro -%}
+
+{% macro iperf_results(results) %}
+{% for group in results|groupby('tag') %}
+{% set lines = group.list %}
+{{group.grouper|title}}
+-----------------------
+{% for destination in lines %}
+{{line([destination.destination|string|title])}}
+{{line(['bit/s', 'Bytes', 'Start', 'End'])}}
+{% if destination.bytes is defined %}
+{% set l =  destination %}
+{{line([l.bits_per_second|size + 'bits/s', l.bytes|size + 'bytes' , l.start, l.end])}}
+{% else %}
+{{line([destination.message])}}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endmacro -%}
+
+
+
+MIIT-NV Report
+{{report_date}}
+
+{{start_page('Summary')}}
+
+Results
+-------
+{{line(['Test', 'Passed', 'Failed', 'Total']) }}
+{% for test in tests %}
+{% set test_list = hostvars[inventory_hostname]['global_results'][test] %}
+{% set total = test_list|length %}
+{% set success = test_list|selectattr("success",'sameas', 1)|list|length %}
+{% set failure = test_list|selectattr("success",'sameas', 0)|list|length %}
+{{ line([test, success, failure, total]) + '\n' }} 
+{%- endfor %}
+
+
+{% for hostname, actions in local_results.iteritems() %}
+
+{{start_page(hostvars[hostname]['nv_name'])}}
+   
+{{start_subpage('Summary')}}
+
+Results
+--------
+{{line(['Test', 'Passed', 'Failed', 'Total']) }}
+{% for test in tests -%}
+{% set test_list = actions[test]%}
+{% set total = test_list|length %}
+{% set success = test_list|selectattr("success",'sameas', 1)|list|length %}
+{% set failure = test_list|selectattr("success",'sameas', 0)|list|length %}
+{{ line([test, success, failure, total]) + '\n' }}
+{%- endfor %}
+
+
+{% if hostvars[hostname]['host_data'] is defined %}
+{{start_subpage('Info')}}
+
+{% set host = hostvars[hostname]['host_data'] %}
+Host Information
+----------------
+{{ array(host['host_information']) }}
+
+IP-addresses
+------------
+{{ array(host['host_ips']) }}
+{% endif %}
+{% if hostvars[hostname]['routes'] is defined %}
+Routing
+-------
+{{line(['Dest', 'Gateway', 'Genmask', 'Flags', 'Metric', 'Ref', 'Use', 'Iface'])}}
+{% for r in hostvars[hostname]['routes'] %}
+{{line([r.destination, r.gateway, r.genmask, r.flags, r.metric, r.ref, r.use, r.iface])}}
+{% endfor %}
+
+
+Memory
+------
+{{ array(host['memory']) }}
+{% endif %}
+
+
+{% for test, results in actions.iteritems() %}
+{{start_subpage(test)}}
+{% if test == 'ping' %} 
+{{ping_results(results)}}
+{% elif test == 'mtr' %} 
+{{mtr_results(results)}}
+{% elif test == 'iperf' %} 
+{{iperf_results(results)}}
+{% elif test == 'fio' %} 
+{#{fio_results(results)}#}
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+
+
+
+

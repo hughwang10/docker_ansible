@@ -1,0 +1,45 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# defaults file for roles/vm_config
+system_versiontag: ""
+vmnic_0: "eth0"
+vmnic_1: "eth1"
+vmnic_2: "eth2"
+vmnic_3: "eth3"
+vmnic_4: "eth4"
+vmnic_5: "eth5"
+vmnic_0_edev: "eth0"
+vmnic_1_edev: "eth1"
+vmnic_2_edev: "eth2"
+vmnic_3_edev: "eth3"
+vmnic_4_edev: "eth4"
+vmnic_5_edev: "eth5"
+registrar_url: "https://{{ msa_ipaddr }}:9443/api/"
+deploy_platform: "deploy_vbox"
+wget_recursive_opts: "-r --no-parent "
+output_folder_remote: "{{ output_folder }}"
+msp_linux_distro: SLES_11_SP3
+hypervisor: ""
+all_vm_types: [ "mn", "dk", "ts", "slb", "mon", "ddc", "da", "cim", "vom", "jeos", "tools", "custom" ] 
+ci_issue_text_1: '\"#################################################################\"'
+ci_issue_text_2: '\"#                                                               #\"'
+ci_issue_text_3: '\"#     * * *  Cloud-init configuration is in progress  * * *     #\"'
+ci_issue_text_4: '\"#                                                               #\"'
+ci_issue_text_5: '\"#     The system will reboot shortly and then be accessible     #\"'
+ci_issue_text_6: '\"#                                                               #\"'
+ci_issue_text_7: '\"#################################################################\"'
+ci_issue_lines: 7
+use_ci_issue_text: True
+irqbalance_args: "--hintpolicy ignore"
+

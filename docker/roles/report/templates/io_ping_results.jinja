@@ -1,0 +1,46 @@
+{% from "macros.jinja" import line with context %}
+
+{% macro io_ping_results(results) %}
+
+{% for group in results|groupby('_label') %}
+{% set lines = group.list %}
+ <div class="col-md-12">
+  <h3>{{group.grouper|title}}</h3>
+  <table class="table table-bordered table-striped table-hover nv-table"> 
+          <thead>
+            <tr>
+              <th colspan="3"></th>
+              <th colspan="4">Latency</th>
+            </tr>
+            <tr>
+              <th>Disk</th>
+              <th>Disk Size</th>
+              <th>Completed</th>
+              <th>Max</th>
+              <th>Min</th>
+              <th>Mdev</th>
+              <th>Average</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for l in lines %}
+            {% if l._success == 1 %}
+              {% set class = 'bg-success' %}
+            {% else %}
+              {% set class = 'bg-danger' %}
+            {% endif %}
+              
+            {% if l.required_time is not defined %}
+              {{line([l.message], colspan=7, class=class)}}
+            {% elif l.required_time.max is not defined %}
+              {{line([l.disk_name, l.disk_size, l.request_completed], class=class)}}
+            {% else %}
+              {{line([l.disk_name, l.disk_size, l.request_completed, l.required_time.max|time_unit, l.required_time.min|time_unit, l.required_time.mdev|time_unit, l.required_time.avg|time_unit], class=class, id=l._id)}}
+            {% endif %}
+          {% endfor %}  
+          <tbody>
+  </table>
+</div>
+{% endfor %}
+
+{% endmacro %}

@@ -1,0 +1,64 @@
+---
+# Copyright (C) 2016 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/setup_image_pxe
+
+#
+# STEP 1: Create the directory structure on the toolsvm
+#
+- name: "Create tftpboot directory structure"
+  action: shell mkdir -p /srv/tftpboot/boot /srv/tftpboot/image /srv/tftpboot/pxelinux.cfg
+  sudo: yes
+
+#
+# STEP 2: Extract the pxe image a temporary directory
+#
+- name: "Create temporary directory for image extraction"
+  action: shell mkdir -p /tmp/tmp_pxeimgdir
+
+- name: "Extract PXE image file to temporary directory"
+  action: shell tar -xvf {{ path_to_images }}/*{{ node_type | upper }}*.xz -C /tmp/tmp_pxeimgdir/.
+
+#
+# STEP 3: Move files to correct paths
+#
+- name: "Move initrd file to tftpboot boot directory"
+  action: shell mv /tmp/tmp_pxeimgdir/initrd*install.gz /srv/tftpboot/boot/initrd-{{ node_type }}-v1
+  sudo: yes
+
+- name: "Move linux file to tftpboot boot directory"
+  action: shell mv /tmp/tmp_pxeimgdir/initrd*kernel*default /srv/tftpboot/boot/linux-{{ node_type }}-v1
+  sudo: yes
+
+- name: "Move md5 file to tftpboot image directory"
+  action: shell mv /tmp/tmp_pxeimgdir/*{{ node_type | upper }}*.md5 /srv/tftpboot/image/.
+  sudo: yes
+
+- name: "Move xz image file to tftpboot image directory"
+  action: shell mv /tmp/tmp_pxeimgdir/*{{ node_type | upper }}*.xz /srv/tftpboot/image/.
+  sudo: yes
+
+- name: "Copy pxelinux.0 to tftpboot root directory"
+  action: copy src=/usr/share/syslinux/pxelinux.0 dest=/srv/tftpboot/pxelinux.0
+  sudo: yes
+
+#
+# STEP 4: Set correct file permission and user-group
+#
+- name: "Setting file permissions on tftpboot"
+  action: shell chmod -R 755 /srv/tftpboot
+  sudo: yes
+  
+- name: "Setting user and group on tftpboot"
+  action: shell chown -R root:root /srv/tftpboot
+  sudo: yes

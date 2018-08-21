@@ -1,0 +1,71 @@
+{% from "macros.jinja" import line with context %}
+
+{% macro fio_results(results) %}
+  {% for group in results|groupby('_label') %}
+  {% set lines = group.list %}
+     <div class="col-md-12">
+       <h3>{{group.grouper|title}}</h3>
+     </div>
+     {% for e in lines %}
+        {% set danger='' %}
+        {% if e.get('_error', False) == True or e._success == False %}
+        {% set danger='danger' %}
+        {% endif %}
+       <div class="col-md-12">
+        <table class="table table-bordered table-striped table-hover nv-table {{danger}}" id="{{e._id}}">
+                <thead>
+                  <tr>
+                    <th colspan="9">{{e.name|string|title}}</th>
+                  </tr>
+                  <tr>
+                    <th></th>
+                    <th colspan="4">Bandwidth</th>
+                    <th colspan="4">Latency</th>
+                  </tr>
+                  <tr>
+                    <th>Operation</th>
+                    <th>Global</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>Avg</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>Avg</th>
+                    <th>Iops</th>
+                </thead>
+                <tbody>
+                  {% if e.get('_error', False) == True %}
+                  {{line([e.message], colspan=9)}}
+                  {% else %}
+                  {{line(['Read', e.read.bw_global|string + ' Kb/s', e.read.bw_min|string + ' Kb/s', e.read.bw_max|string + ' Kb/s', e.read.bw_avg|string + ' Kb/s', e.read.clat_min|string + ' us', e.read.clat_max|string + ' us', e.read.clat_avg|string + ' us', e.read.iops])}}
+                  {{line(['Write', e.write.bw_global|string + ' Kb/s', e.write.bw_min|string + ' Kb/s', e.write.bw_max|string + ' Kb/s', e.write.bw_avg|string + ' Kb/s', e.write.clat_min|string + ' us', e.write.clat_max|string + ' us', e.write.clat_avg|string + ' us', e.write.iops])}}
+                  {% endif %}
+                <tbody>
+        </table>
+  {% set images = e.images if e.images is defined else {} %}
+     {% for name,image in images.iteritems() %}
+     {% if 'png' in name and image != '' %}
+       <div class="col-md-6">
+        <a href="#" data-toggle="modal" data-target="#lightbox">
+          <img width="100%" src="data:image/png;base64,{{image}}"/>
+        </a>
+      </div>
+    {% endif %}
+    {% endfor %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+
+  <div id="lightbox" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="myLargeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <button type="button" class="close hidden" data-dismiss="modal" aria-hidden="true"><p>×</p></button>
+      <div class="modal-content">
+        <div class="modal-body">
+          <img src="" alt="" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+{% endmacro %}

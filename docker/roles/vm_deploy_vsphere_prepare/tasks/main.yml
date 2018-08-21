@@ -1,0 +1,469 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm_deploy_vsphere_prepare
+
+
+- set_fact: template_name="{{ clusterid }}-{{ vm_type }}{{ system_versiontag }}"
+  when: afg_deployment_type in ["SA", "ABC"]
+
+- set_fact: template_name="{{ vm_type }}{{ system_versiontag }}-{{ template_postfix | default('template') }}_{{ deployment_index_h }}"
+  when: afg_deployment_type == "HA"
+
+- debug: msg="{{ output_folder_remote | default(output_folder) }}"
+
+# - name: Creates  VM  VM disk directory !
+#   file: path={{ output_folder_remote }}/vm state=directory
+#   register: result1
+#   ignore_errors: True
+#   when: action == "deploy_vsphere"
+
+# - name: Creates  VM  VM disk directory with sudo !
+#   file: path={{ output_folder_remote }}/vm state=directory
+#   become: yes
+#   become_method: sudo 
+#   when: result1 | failed and (action == "deploy_vsphere")
+
+# - name: Changes VM  VM disk directory !
+#   action: shell chown -R {{ remote_user }} {{ output_folder_remote + '/../') | realpath }} 
+#   become: yes
+#   become_method: sudo 
+#   when: result1 | failed and (action == "deploy_vsphere")
+
+- name: "Find the latest vmdk"
+  local_action: shell ls -t {{ vm_vmdk }}.gz | head -1
+  register: cmd1_result 
+  when: action == "deploy_vsphere"
+
+- debug: msg="{{ cmd1_result }}"
+
+- name: "Find the latest vmdk, normalize the path"
+  local_action: shell readlink -m {{ cmd1_result.stdout }}
+  register: cmd_result
+  when: action == "deploy_vsphere"
+
+- name: "Assign var ..."
+  set_fact: file_result={{ cmd_result.stdout | basename | regex_replace('^(.*).gz$','\\1')}}
+  when: action == "deploy_vsphere"
+
+- debug: msg="{{ output_folder_remote }}/vm/{{ file_result }}"
+  when: action == "deploy_vsphere"
+
+# - name: "Copy '{{ cmd_result.stdout }}' to deploy host"
+#   action: copy src={{ cmd_result.stdout }} dest="{{ output_folder_remote }}/vm/{{ file_result }}"
+#   when: (vm_disk_nocopy | default(False)) != True and (action == "deploy_vsphere") 
+
+#
+# The following actions are for VMWARE ONLY
+#
+
+- name: msg="Clean possible existing template"
+  vsphere_guest:
+    vcenter_hostname: "{{ vsphere_vcenter }}"
+    username: "{{ vsphere_vcusername }}"
+    password: "{{ vsphere_vcpassword }}"
+    guest: "{{ template_name }}"
+    state: absent
+  when: action == "deploy_vsphere" and (force_remove | default(False) == True or force_remove | default(False) == "True")
+
+- name: msg="Find the VM"
+  vsphere_find_vm:
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    vm_name: "{{ template_name }}"
+    folder_name: ""
+  register: deployed_template
+  when: action == "deploy_vsphere"
+
+# - name: msg="Upload vmdk file to vSphere"
+#   vsphere_loadfile:
+#     src: "{{ output_folder_remote }}/vm/{{ file_result }}"
+#     dest: "{{ vsphere_file_root_path }}/{{ file_result }}"
+#     vsphere_vcenter: "{{ vsphere_vcenter }}"
+#     vsphere_vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+#     vsphere_vcpassword: "{{ vsphere_vcpassword }}"
+#     vsphere_datacenter: "{{ vsphere_datacenter }}"
+#     vsphere_datastore: "{{ vsphere_datastore_misc }}"
+#     vsphere_esxihostname: "{{ vsphere_esxihostname }}"
+# #    vsphere_test1: '{{ vsphere_test1 }}'
+# #    vsphere_test1: "{{ vsphere_test1 | replace('\x40','##at##', 1) }}"
+# #    vsphere_test2: "{{ vsphere_test2 }}"
+#   when: (vm_disk_nocopy) | default(False) != True and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: msg="Create a guest template for slb"
+  vsphere_guest_afg:
+    vcenter_hostname: "{{ vsphere_vcenter }}"
+    username: "{{ vsphere_vcusername }}"
+    password: "{{ vsphere_vcpassword }}"
+    guest: "{{ template_name }}"
+    state: present
+    vm_extra_config:
+      vcpu.hotadd: no
+      mem.hotadd:  no
+      notes: "This is a VM for MSP {{ template_name }}"
+    vm_disk:
+      disk1:
+        size_gb: "{{ resource_disk_1 | default(50) }}"
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+      disk2:
+        size_gb: 1
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+      disk3:
+        size_gb: 1
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+      disk4:
+        size_gb: 1
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+      disk5:
+        size_gb: 1
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+    vm_nic:
+      nic1:
+        type: "{{ vsphere_nic_oam }}"
+        network: "{{ oam_name }}"
+        network_type: standard
+        when: (nic1_enable == 1)
+      nic2:
+        type: "{{ vsphere_nic_internal }}"
+        network: "{{ internal_name }}"
+        network_type: standard
+        when: (nic2_enable == 1)
+      nic3:
+        type: "{{ vsphere_nic_access }}"
+        network: "{{ access_name }}"
+        network_type: standard
+        when: (nic3_enable == 1)
+      nic4:
+        type: "{{ vsphere_nic_internet }}"
+        network: "{{ internet_name }}"
+        network_type: standard
+        when: (nic4_enable == 1)
+      nic5:
+        type: "{{ vsphere_nic_accessingress }}"
+        network: "{{ accessingress_name }}"
+        network_type: standard
+        when: (nic5_enable == 1)
+      nic6:
+        type: "{{ vsphere_nic_internetingress }}"
+        network: "{{ internetingress_name }}"
+        network_type: standard
+        when: (nic6_enable == 1)
+    vm_hardware:
+      memory_mb: "{{ resource_mem_vm }}"
+      num_cpus: "{{ resource_cpu_vm }}"
+      osid: "{{ vsphere_guestosid }}"
+      scsi: "{{ vsphere_guestscsi }}"
+      vm_cdrom:
+        cdrom1:
+          type: "iso"
+          iso_path: "/{{ vsphere_file_root_path }}/{{ clusterid }}/empty.iso"
+        cdrom2:
+          type: "iso"
+          iso_path: "{{ vsphere_datastore_misc }}/{{ vsphere_file_root_path }}/afg_supp.iso"
+    esxi:
+      datacenter: "{{ vsphere_datacenter }}"
+      datastore: "{{ vsphere_datastore_misc }}"
+      hostname: "{{ vsphere_esxihostname }}"
+  when: vm_type in [ "slb" ] and afg_deployment_type == "HA" and action == "deploy_vsphere"
+
+- name: msg="Create a guest template other than slb"
+  vsphere_guest_afg:
+    vcenter_hostname: "{{ vsphere_vcenter }}"
+    username: "{{ vsphere_vcusername }}"
+    password: "{{ vsphere_vcpassword }}"
+    guest: "{{ template_name }}"
+    state: present
+    vm_extra_config:
+      vcpu.hotadd: no
+      mem.hotadd:  no
+      notes: "This is a template VM for AFG"
+    vm_disk:
+      disk1:
+        size_gb: "{{ resource_disk_1 | default(50) }}"
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+      disk2:
+        size_gb: "{{ resource_disk_2 | default(20) }}"
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+      disk3:
+        size_gb: "{{ resource_disk_3 | default(20) }}"
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+      disk4:
+        size_gb: "{{ resource_disk_4 | default(60) }}"
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+      disk5:
+        size_gb: "{{ resource_disk_5 | default(20) }}"
+        type: thin
+        datastore: "{{ vsphere_datastore_misc }}"
+    vm_nic:
+      nic1:
+        type: "{{ vsphere_nic_oam }}"
+        network: "{{ oam_name }}"
+        network_type: standard
+        when: (nic1_enable == 1)
+      nic2:
+        type: "{{ vsphere_nic_internal }}"
+        network: "{{ internal_name }}"
+        network_type: standard
+        when: (nic2_enable == 1)
+      nic3:
+        type: "{{ vsphere_nic_access }}"
+        network: "{{ access_name }}"
+        network_type: standard
+        when: (nic3_enable == 1)
+      nic4:
+        type: "{{ vsphere_nic_internet }}"
+        network: "{{ internet_name }}"
+        network_type: standard
+        when: (nic4_enable == 1)
+      nic5:
+        type: "{{ vsphere_nic_controlplanesig }}"
+        network: "{{ controlplanesig_name }}"
+        network_type: standard
+        when: (nic5_enable == 1)
+    vm_hardware:
+      memory_mb: "{{ resource_mem_vm }}"
+      num_cpus: "{{ resource_cpu_vm }}"
+      osid: "{{ vsphere_guestosid }}"
+      scsi: "{{ vsphere_guestscsi }}"
+      vm_cdrom:
+        cdrom1:
+          type: "iso"
+          iso_path: "/{{ vsphere_file_root_path }}/{{ clusterid }}/empty.iso"
+        cdrom2:
+          type: "iso"
+          iso_path: "{{ vsphere_datastore_misc }}/{{ vsphere_file_root_path }}/afg_supp.iso"
+    esxi:
+      datacenter: "{{ vsphere_datacenter }}"
+      datastore: "{{ vsphere_datastore_misc }}"
+      hostname: "{{ vsphere_esxihostname }}"
+  when: vm_type not in [ "slb" ] and action == "deploy_vsphere"
+
+- name: Mount vmdk root file system
+  action:
+    module: vsphere_attach_disk
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    disk_file_path: "{{ vsphere_file_root_path }}/{{ file_result }}"
+  when: action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: Set timesync attribute 
+  action:
+    module: vsphere_update_vm
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    time_sync: "{{ use_host_for_time_sync }}"
+    poweroff_mode: "hard"
+  when: action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: remove unwanted disks from template 
+  action:
+    module: vsphere_remove_disk
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    disk_scsi_addresses: [1,2,3,4]
+  when: (vm_type in [ "dk", "ts", "slb", "ddc", "vom", "da", "cim", "jeos", "tools", "custom", "mon" ] or vm_type not in all_vm_types) and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+
+- name: "Sleep before removing nics"
+  local_action: shell sleep 0.5
+
+- name: remove unwanted nics from template 
+  action:
+    module: vsphere_remove_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 3,4,5,6 ]
+  when: (vm_type in [ "mn", "mon", "vom", "jeos", "tools", "custom", "ddc" ] or vm_type not in all_vm_types) and vmnic_bonds is not defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: remove unwanted nics from template with bonding support
+  action:
+    module: vsphere_remove_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 5,6 ]
+  when: vm_type in [ "mon", "vom", "jeos", "tools", "custom" ] and vmnic_bonds is defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: remove unwanted nics from template 
+  action:
+    module: vsphere_remove_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 4,5,6 ]
+  when: vm_type in [ "da" ] and vmnic_bonds is not defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: remove unwanted nics from TS template 
+  action:
+    module: vsphere_remove_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 6 ]
+  when: vm_type in [ "dk", "ts" ] and vmnic_bonds is not defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: remove unwanted nics from CIM template 
+  action:
+    module: vsphere_remove_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 4, 5, 6 ]
+  when: vm_type in [ "cim" ] and vmnic_bonds is not defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: remove unwanted nics from template 
+  action:
+    module: vsphere_remove_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 5 ]
+  when: vm_type in [ "dk", "ts" ] and controlplanesig_name is not defined and vmnic_bonds is not defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+# for vmware with mor than 4 networks adapters the enumaration in linux will not be sequential 
+# therefore the mapping between adapters and netwoks (portgroups) need to be changed 
+# For a full 8 nic vm the order will be:
+# adapter 1,5,2,6,3,7,4,8 
+- name: reconfigure nics connected network names for SLB
+  action:
+    module: vsphere_reconfigure_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 2,3,4,5,6 ]
+    network_names: [ "{{ access_name }}", "{{ accessingress_name }}", "{{ internetingress_name }}", "{{ internal_name }}", "{{ internet_name }}"  ]
+  when: vm_type in [ "slb" ] and vmnic_bonds is not defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: reconfigure nics connected network names for TS 
+  action:
+    module: vsphere_reconfigure_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 2,3,4,5 ]
+    network_names: [ "{{ access_name }}", "{{ internet_name }}", "{{ controlplanesig_name }}", "{{ internal_name }}" ]
+  when: vm_type in [ "dk", "ts" ] and controlplanesig_name is defined and vmnic_bonds is not defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: reconfigure nics connected network names for DA or CIM 
+  action:
+    module: vsphere_reconfigure_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 3 ]
+    network_names: [ "{{ controlplanesig_name }}" ]
+  when: vm_type in [ "da", "cim" ] and controlplanesig_name is defined and vmnic_bonds is not defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+# when bonded networks is used connect the NICs to other networks/portgroups
+- name: reconfigure nics connected network names for SLB
+  action:
+    module: vsphere_reconfigure_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 1,2,3,4,5,6 ]
+    network_names: [ "{{ vmnic_bonds[0].dev_networks[0] }}", "{{ vmnic_bonds[0].dev_networks[1] }}","{{ vmnic_bonds[1].dev_networks[0] }}", "{{ vmnic_bonds[1].dev_networks[1] }}","{{ vmnic_bonds[2].dev_networks[0] }}", "{{ vmnic_bonds[2].dev_networks[1] }}",  ]
+  when: vm_type in [ "slb", "dk", "ts" ] and vmnic_bonds is defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+
+- name: reconfigure nics connected network names for all type if bonded interfaces used
+  action:
+    module: vsphere_reconfigure_nics
+    vcenter: "{{ vsphere_vcenter }}"
+    vcusername: "{{ vsphere_vcusername | replace('\x40','##at##', 1) }}"
+    vcpassword: "{{ vsphere_vcpassword }}"
+    vm_name: "{{ template_name }}"
+    datacenter: "{{ vsphere_datacenter }}"
+    datastore: "{{ vsphere_datastore_misc }}"
+    esxihostname: "{{ vsphere_esxihostname }}"
+    nic_ids: [ 1,2,3,4,5,6 ]
+    network_names: [ "{{ vmnic_bonds[0].dev_networks[0] }}", "{{ vmnic_bonds[0].dev_networks[1] }}","{{ vmnic_bonds[1].dev_networks[0] }}", "{{ vmnic_bonds[1].dev_networks[1] }}","{{ vmnic_bonds[2].dev_networks[0] }}", "{{ vmnic_bonds[2].dev_networks[1] }}" ]
+  when: vm_type in [ "da", "cim", "slb", "mn", "mon", "ddc", "tools", "custom", "vom" ] and vmnic_bonds is defined and action == "deploy_vsphere" and deployed_template.vm_name == ""
+# controlplanesig_name is defined and
+
+# - name: "Remove file from deploy host after uploading to target system"
+#   file: name={{ output_folder_remote }}/vm/{{ file_result }} state=absent
+#   when: (vm_disk_nocopy | default(False)) != True and (action == "deploy_vsphere") and deployed_template.vm_name == ""
+
+- name: "Add template to host variables"
+  local_action: add_host name={{ template_name }} groups=templates templatename={{ template_name }} 
+
+

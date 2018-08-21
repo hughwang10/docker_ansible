@@ -1,0 +1,27 @@
+---
+- name: afgtools
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - vsphere_guest_afg:
+        vcenter_hostname: "10.44.147.160"
+        username: "administrator@vsphere,local"
+        password: "W@pwap12"
+        guest: newvm001
+        state: absent
+        validate_certs: no
+      register: rst    
+    # - name: msg="Find the VM"
+    #   vsphere_find_vm:
+    #     vcenter: 10.44.147.160
+    #     vcusername: administrator@vsphere.local #"{{ 'administrator@vsphere.local' | replace('\x40','##at##', 1) }}"
+    #     vcpassword: "W@pwap12"
+    #     datacenter: afglab-cluster1
+    #     datastore: datastoreAFG
+    #     esxihostname: 10.44.147.154
+    #     vm_name: c1
+    #     folder_name: ""
+    #   register: rst
+    - debug: msg="{{rst}}"  

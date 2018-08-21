@@ -1,0 +1,779 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+- debug: msg="gen heat template file for {{ vm_name }}"
+
+- name: "Include variable files"
+  local_action: include_vars {{ item.1 }}
+  with_indexed_items: os_vars
+
+#- name: "Create diretory to store generated hot template files"
+#  action: file path="{{ output_folder_remote }}/heat/temp" state=directory
+#  when: action == "deploy_openstack" and vm_type == "mn"
+
+#- name: "Generate main HOT"
+#  when: action == "deploy_openstack" and vm_type == "mn"
+#  action: template src="msp_stack.yaml"  dest="{{ output_folder_remote}}/heat/temp/0.yaml"
+
+- name: "Create {{ output_folder_remote }}/heat/temp/{{ hagroup }}"
+  action: file path={{ output_folder_remote }}/heat/temp/{{ hagroup }} state=directory
+  when: hagroup is defined
+  ignore_errors: yes
+
+- name: "Generate hagroup HOT"
+  when: action == "deploy_openstack" and (hagroup is defined) and ( use_heat_env_file | default('False') == 'False' )
+  action: template src="msp_stack_hagroup.yaml"  dest="{{ output_folder_remote}}/heat/temp/{{ hagroup }}/0.yaml"
+
+- name: "Generate hagroup HOT with heat env file"
+  when: action == "deploy_openstack" and (hagroup is defined) and ( use_heat_env_file | default('False') == 'True' )
+  action: template src="msp_stack_hagroup_with_env_file.yaml"  dest="{{ output_folder_remote}}/heat/temp/{{ hagroup }}/0.yaml"
+
+- name: "Generate hagroup HOT with heat env file"
+  when: action == "deploy_openstack" and (hagroup is defined) and vm_type == 'tools' and infra_ext_ip is defined and ( use_heat_env_file | default('False') == 'True' )
+  action: template src="msp_stack_hagroup_with_env_file_empty_cee.yaml"  dest="{{ output_folder_remote}}/heat/temp/{{ hagroup }}/0.yaml"
+
+#- name: "Generate HOT files"
+#  when: action == "deploy_openstack" and vm_type == "mn"
+#  action: template src="{{ item.1 }}"  dest="{{ output_folder_remote }}/heat/{{ item.1 }}"
+#  with_indexed_items: os_hotfiles
+
+#- name: "Gen msp common stack"
+#  shell: cp {{ output_folder_remote }}/heat/temp/0.yaml {{ output_folder_remote }}/heat/{{ os_msptemplate }}
+#  when: action == "deploy_openstack" and vm_type == "mn" and (hagroup is defined)
+
+#- name: "Check if there is a running msp common stack"
+#  action: shell heat stack-list |grep -w {{ os_stackname }} 
+#  when: action == "deploy_openstack" and vm_type == "mn" and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  register: mspstack_exists
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Deploy using python-heatclient heat stack-create - MSP Common Stuff"
+#  when: (action == "deploy_openstack") and ( vm_type == "mn" ) and (hagroup is defined) and (mspstack_exists.stdout == "") and (cee_dryrun | default('False') == 'False') and ( heat_rollback | default('False') == 'True')
+#  action: shell heat stack-create -f {{ output_folder_remote }}/heat/{{ os_msptemplate }} -r {{ os_stackname }}
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Deploy using python-heatclient heat stack-create - MSP Common Stuff"
+#  when: (action == "deploy_openstack") and ( vm_type == "mn" ) and (hagroup is defined) and (mspstack_exists.stdout == "") and (cee_dryrun | default('False') == 'False') and ( heat_rollback | default('False') == 'False')
+#  action: shell heat stack-create -f {{ output_folder_remote }}/heat/{{ os_msptemplate }} {{ os_stackname }}
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Wait till the stack update completed - MSP Common Stuff"
+#  when: (action == "deploy_openstack") and ( vm_type == "mn" ) and (hagroup is defined) and (mspstack_exists.stdout == "") and (cee_dryrun | default('False') == 'False')
+#  action: shell heat stack-list |grep -w {{ os_stackname }}
+#  register: result
+#  until: (result.stdout.find("COMPLETE") !=-1) or (result.stdout.find("FAIL") !=-1)
+#  retries: 6000
+#  delay:  6
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+### "There is a running msp common stack, get Network IDs and Flavor IDs"
+#
+# OAM NETWORK
+#
+#- name: "Get {{ os_stackname }}-{{ oam_name }} Network Id"
+#  action: shell neutron net-list | grep -w {{ os_stackname }}-{{ oam_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: oam_net_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ oam_name }} Network Id"
+#  local_action: add_host name="oam_net_id" groups=net_id filename={{ oam_net_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ oam_name }} Network Id"
+#  local_action: add_host name="oam_net_id" groups=net_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#- name: "Get {{ os_stackname }}-{{ oam_name }} Subnet Id"
+#  action: shell neutron subnet-list | grep -w {{ os_stackname }}-{{ oam_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: oam_subnet_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ oam_name }} Subnet Id"
+#  local_action: add_host name="oam_subnet_id" groups=subnet_id filename={{ oam_subnet_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ oam_name }} Subnet Id"
+#  local_action: add_host name="oam_subnet_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# INTERNAL NETWORK
+#
+#- name: "Get {{ os_stackname }}-{{ internal_name }} Network Id"
+#  action: shell neutron net-list | grep -w {{ os_stackname }}-{{ internal_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: internal_net_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ internal_name }} Network Id"
+#  local_action: add_host name="internal_net_id" groups=net_id filename={{ internal_net_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ internal_name }} Network Id"
+#  local_action: add_host name="internal_net_id" groups=net_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#- name: "Get {{ os_stackname }}-{{ internal_name }} Subnet Id"
+#  action: shell neutron subnet-list | grep -w {{ os_stackname }}-{{ internal_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: internal_subnet_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ internal_name }} Subnet Id"
+#  local_action: add_host name="internal_subnet_id" groups=subnet_id filename={{ internal_subnet_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ internal_name }} Subnet Id"
+#  local_action: add_host name="internal_subnet_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# ACCESS INETWORK
+#
+#- name: "Get {{ os_stackname }}-{{ access_name }} Network Id"
+#  action: shell neutron net-list | grep -w {{ os_stackname }}-{{ access_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: access_net_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ access_name }} Network Id"
+#  local_action: add_host name="access_net_id" groups=net_id filename={{ access_net_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ access_name }} Network Id"
+#  local_action: add_host name="access_net_id" groups=net_id filename="" 
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#- name: "Get {{ os_stackname }}-{{ access_name }} Subnet Id"
+#  action: shell neutron subnet-list | grep -w {{ os_stackname }}-{{ access_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: access_subnet_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ access_name }} Subnet Id"
+#  local_action: add_host name="access_subnet_id" groups=subnet_id filename={{ access_subnet_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined)  and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ access_name }} Subnet Id"
+#  local_action: add_host name="access_subnet_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined)  and (cee_dryrun | default('False') == 'True')
+
+#
+# INTERNET NETWORK
+#
+#- name: "Get {{ os_stackname }}-{{ internet_name }} Network Id"
+#  action: shell neutron net-list | grep -w {{ os_stackname }}-{{ internet_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: internet_net_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ internet_name }} Network Id"
+#  local_action: add_host name="internet_net_id" groups=net_id filename={{ internet_net_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False') 
+
+#- name: "Save {{ os_stackname }}-{{ internet_name }} Network Id"
+#  local_action: add_host name="internet_net_id" groups=net_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#- name: "Get {{ os_stackname }}-{{ internet_name }} Subnet Id"
+#  action: shell neutron subnet-list | grep -w {{ os_stackname }}-{{ internet_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: internet_subnet_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ internet_name }} Subnet Id"
+#  local_action: add_host name="internet_subnet_id" groups=subnet_id filename={{ internet_subnet_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ internet_name }} Subnet Id"
+#  local_action: add_host name="internet_subnet_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# AccessIngress NETWORK
+#
+#- name: "Get {{ os_stackname }}-{{ accessingress_name }} Network Id"
+#  action: shell neutron net-list | grep -w {{ os_stackname }}-{{ accessingress_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: accessingress_net_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ accessingress_name }} Network Id"
+#  local_action: add_host name="accessingress_net_id" groups=net_id filename={{ accessingress_net_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ accessingress_name }} Network Id"
+#  local_action: add_host name="accessingress_net_id" groups=net_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#- name: "Get {{ os_stackname }}-{{ accessingress_name }} Subnet Id"
+#  action: shell neutron subnet-list | grep -w {{ os_stackname }}-{{ accessingress_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: accessingress_subnet_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ accessingress_name }} Subnet Id"
+#  local_action: add_host name="accessingress_subnet_id" groups=subnet_id filename={{ accessingress_subnet_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ accessingress_name }} Subnet Id"
+#  local_action: add_host name="accessingress_subnet_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# InternetIngress Network
+#
+#- name: "Get {{ os_stackname }}-{{ internetingress_name }} Network Id"
+#  action: shell neutron net-list | grep -w {{ os_stackname }}-{{ internetingress_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: internetingress_net_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ internetingress_name }} Network Id"
+#  local_action: add_host name="internetingress_net_id" groups=net_id filename={{ internetingress_net_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ internetingress_name }} Network Id"
+#  local_action: add_host name="internetingress_net_id" groups=net_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#- name: "Get {{ os_stackname }}-{{ internetingress_name }} Subnet Id"
+#  action: shell neutron subnet-list | grep -w {{ os_stackname }}-{{ internetingress_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: internetingress_subnet_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#     OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ internetingress_name }} Subnet Id"
+#  local_action: add_host name="internetingress_subnet_id" groups=subnet_id filename={{ internetingress_subnet_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-{{ internetingress_name }} Subnet Id"
+#  local_action: add_host name="internetingress_subnet_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# ControlPlaneSig  Network
+#
+#- name: "Get {{ os_stackname }}-{{ controlplanesig_name }} Network Id"
+#  action: shell neutron net-list | grep -w {{ os_stackname }}-{{ controlplanesig_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: controlplanesig_net_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (controlplanesig_network_prefix is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ controlplanesig_name }} Network Id"
+#  local_action: add_host name="controlplanesig_net_id" groups=net_id filename={{ controlplanesig_net_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (controlplanesig_network_prefix is defined) and (cee_dryrun | default('False') == 'False') 
+
+#- name: "Save {{ os_stackname }}-{{ controlplanesig_name }} Network Id"
+#  local_action: add_host name="controlplanesig_net_id" groups=net_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and ((cee_dryrun | default('False') == 'True') or (controlplanesig_network_prefix is not defined))
+
+#- name: "Get {{ os_stackname }}-{{ controlplanesig_name }} Subnet Id"
+#  action: shell neutron subnet-list | grep -w {{ os_stackname }}-{{ controlplanesig_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: controlplanesig_subnet_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (controlplanesig_network_prefix is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-{{ controlplanesig_name }} Subnet Id"
+#  local_action: add_host name="controlplanesig_subnet_id" groups=subnet_id filename={{ controlplanesig_subnet_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (controlplanesig_network_prefix is defined) and (cee_dryrun | default('False') == 'False') 
+
+#- name: "Save {{ os_stackname }}-{{ controlplanesig_name }} Subnet Id"
+#  local_action: add_host name="controlplanesig_subnet_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and ((cee_dryrun | default('False') == 'True') or (controlplanesig_network_prefix is not defined))
+
+#
+# INFRA_EXT_NET
+#
+- name: "Get {{ os_stackname }}-{{ os_infra_ext_name }} Network Id"
+  action: shell neutron net-list | grep -w {{ os_infra_ext_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+  register: infra_ext_net_id
+  when: ( vm_type == "tools" and infra_ext_ip is defined ) and (hagroup is defined) and (cee_dryrun | default('False') | bool == False)
+  ignore_errors: yes
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Save {{ os_stackname }}-{{ os_infra_ext_name }} Network Id"
+  local_action: add_host name="infra_ext_net_id" groups=net_id filename={{ infra_ext_net_id.stdout + 'X'}}
+#  local_action: add_host name="infra_ext_net_id" groups=net_id filename={{ infra_ext_net_id_i.stdout + 'X' }}
+  when: ( vm_type == "tools" and infra_ext_ip is defined ) and (hagroup is defined) and (cee_dryrun | default('False') | bool == False)
+
+- name: "Save {{ os_stackname }}-{{ os_infra_ext_name }} Network Id"
+  local_action: add_host name="infra_ext_net_id" groups=net_id filename="netX"
+  when: ( vm_type == "tools" and infra_ext_ip is defined ) and (hagroup is defined) and (cee_dryrun | default('False') | bool == True)
+
+- name: "Get {{ os_stackname }}-{{ os_infra_ext_name }} Subnet Id"
+  action: shell neutron subnet-list | grep -w {{ os_infra_ext_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+  register: infra_ext_subnet_id
+  when: ( vm_type == "tools" and infra_ext_ip is defined ) and (hagroup is defined) and (cee_dryrun | default('False') | bool == False)
+  ignore_errors: yes
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Save {{ os_stackname }}-{{ os_infra_ext_name }} Subnet Id"
+  local_action: add_host name="infra_ext_subnet_id" groups=subnet_id filename={{ infra_ext_subnet_id.stdout }}
+  when: ( vm_type == "tools" and infra_ext_ip is defined ) and (hagroup is defined) and (cee_dryrun | default('False') | bool == False)
+
+- name: "Save {{ os_stackname }}-{{ os_infra_ext_name }} Subnet Id"
+  local_action: add_host name="infra_ext_subnet_id" groups=subnet_id filename="subX"
+  when: ( vm_type == "tools" and infra_ext_ip is defined ) and (hagroup is defined) and (cee_dryrun | default('False') | bool == True)
+
+
+#
+# Get MSP Flavor IDs
+#
+# DA
+#
+#- name: "Get {{ os_stackname }}-da Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-da | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: da_flavor_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-da Flavor Id"
+#  local_action: add_host name="da_flavor_id" groups=subnet_id filename={{ da_flavor_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-da Flavor Id"
+#  local_action: add_host name="da_flavor_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# vom 
+#
+#- name: "Get {{ os_stackname }}-vom Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-vom | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: vom_flavor_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-vom Flavor Id"
+#  local_action: add_host name="vom_flavor_id" groups=subnet_id filename={{ vom_flavor_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-vom Flavor Id"
+#  local_action: add_host name="vom_flavor_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# ddc 
+#
+#- name: "Get {{ os_stackname }}-ddc Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-ddc | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: ddc_flavor_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-ddc Flavor Id"
+#  local_action: add_host name="ddc_flavor_id" groups=subnet_id filename={{ ddc_flavor_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-ddc Flavor Id"
+#  local_action: add_host name="ddc_flavor_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') =='True')
+
+#
+# tools 
+#
+#- name: "Get {{ os_stackname }}-tools Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-tools | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: tools_flavor_id
+#  when: ( vm_type == "mn") and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Get {{ os_stackname }}-generic Flavor Id"
+  action: shell nova flavor-list | grep {{ tools_flavor | default('m1.disk') }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+  register: generic_flavor_id
+  when: ( vm_type == "tools" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False') and infra_ext_ip is defined
+  ignore_errors: yes
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Save {{ os_stackname }}-tools Flavor Id"
+  local_action: add_host name="tools_flavor_id" groups=subnet_id filename={{ tools_flavor_id.stdout | default(generic_flavor_id.stdout) }}
+  when: ( vm_type == 'tools' and infra_ext_ip is defined) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+- name: "Save {{ os_stackname }}-tools Flavor Id"
+  local_action: add_host name="tools_flavor_id" groups=subnet_id filename=""
+  when: ( vm_type == 'tools' and infra_ext_ip is defined) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# mon 
+#
+#- name: "Get {{ os_stackname }}-mon Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-mon | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: mon_flavor_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-mon Flavor Id"
+#  local_action: add_host name="mon_flavor_id" groups=subnet_id filename={{ mon_flavor_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False') 
+
+#- name: "Save {{ os_stackname }}-mon Flavor Id"
+#  local_action: add_host name="mon_flavor_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# slb 
+#
+#- name: "Get {{ os_stackname }}-slb Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-slb | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: slb_flavor_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-slb Flavor Id"
+#  local_action: add_host name="slb_flavor_id" groups=subnet_id filename={{ slb_flavor_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False') 
+
+#- name: "Save {{ os_stackname }}-slb Flavor Id"
+#  local_action: add_host name="slb_flavor_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# ts 
+#
+#- name: "Get {{ os_stackname }}-ts Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-ts | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: ts_flavor_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-ts Flavor Id"
+#  local_action: add_host name="ts_flavor_id" groups=subnet_id filename={{ ts_flavor_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-ts Flavor Id"
+#  local_action: add_host name="ts_flavor_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# cim 
+#
+#- name: "Get {{ os_stackname }}-cim Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-cim | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: cim_flavor_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-cim Flavor Id"
+#  local_action: add_host name="cim_flavor_id" groups=subnet_id filename={{ cim_flavor_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-cim Flavor Id"
+#  local_action: add_host name="cim_flavor_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# mn
+#
+#- name: "Get {{ os_stackname }}-mn Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-mn | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: mn_flavor_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-mn Flavor Id"
+#  local_action: add_host name="mn_flavor_id" groups=subnet_id filename={{ mn_flavor_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+
+#- name: "Save {{ os_stackname }}-mn Flavor Id"
+#  local_action: add_host name="mn_flavor_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+# custom 
+#
+#- name: "Get {{ os_stackname }}-custom Flavor Id"
+#  action: shell nova flavor-list | grep {{ os_stackname }}-custom | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+#  register: custom_flavor_id
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False')
+#  ignore_errors: yes
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Save {{ os_stackname }}-custom Flavor Id"
+#  local_action: add_host name="custom_flavor_id" groups=subnet_id filename={{ custom_flavor_id.stdout }}
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'False') 
+
+#- name: "Save {{ os_stackname }}-custom Flavor Id"
+#  local_action: add_host name="custom_flavor_id" groups=subnet_id filename=""
+#  when: ( vm_type == "mn" ) and (hagroup is defined) and (cee_dryrun | default('False') == 'True')
+
+#
+#
+#- name: "Generate Heat Env file"
+#  when: action == "deploy_openstack" and ( vm_type == "mn" ) and (hagroup is defined) and ( use_heat_env_file | default('False') == 'True' )  
+#  action: template src="heat_env_file.template"  dest="{{ output_folder_remote}}/heat/{{ os_stackname }}_heat_env_file"
+
+- name: "Generate Heat Env file Tools VM"
+  when: action == "deploy_openstack" and vm_type == "tools" and infra_ext_ip is defined and hagroup is defined and ( use_heat_env_file | default('False') == 'True' )  
+  action: template src="heat_env_file_empty_cee.template"  dest="{{ output_folder_remote}}/heat/{{ os_stackname }}_heat_env_file" force="yes"
+
+#- name: "Create {{ output_folder_remote }}/heat/temp"
+#  file: path={{ output_folder_remote }}/heat/temp state=directory
+
+#- name: "Create {{ output_folder_remote }}/heat/temp/{{ hagroup }}"
+#  file: path={{ output_folder_remote }}/heat/temp/{{ hagroup }} state=directory
+#  shell: mkdir {{ output_folder_remote }}/heat/temp/{{ hagroup }}
+#  when: hagroup is defined
+#  ignore_errors: yes
+- name: "check if the old uc volumes are in the single stack"
+  shell: heat template-show {{ os_stackname }} | grep "uc_volume_" | wc -l
+  register: old_uc_volumes
+  when: hagroup is defined and vm_type == 'ts' and output_folder_remote_old is defined and system_versiontag_old is defined and system_versiontag != system_versiontag_old
+  ignore_errors: yes
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Assign vars..old_volumes_in_single_stack as False"
+  set_fact: old_volumes_in_single_stack=False and  vm_type == 'ts'
+
+- name: " Assing vars...old_volumes_in_single_stack as True"
+  set_fact: old_volumes_in_single_stack=True
+  when: hagroup is defined and vm_type == 'ts' and old_uc_volumes is defined and old_uc_volumes.stdout != '0'
+
+- name: "Get id of the old uc volumes, single stack"
+  shell: cinder list | grep uc_{{ vm_name }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//' 
+  register: uc_volume_id_1 
+  when: hagroup is defined and vm_type == 'ts' and old_volumes_in_single_stack == True
+  ignore_errors: yes
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Get id of the old uc volumes, single stack"
+  shell: cinder list | grep uc_ts_{{ vm_name | regex_replace('.*-(.*)$', '\\1') }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+  register: uc_volume_id_2
+  when: hagroup is defined and vm_type == 'ts' and old_volumes_in_single_stack == True
+  ignore_errors: yes
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- set_fact: old_uc_volume_id={{ uc_volume_id_1.stdout }}
+  when: hagroup is defined and vm_type == 'ts' and old_volumes_in_single_stack == True and uc_volume_id_1.stdout !=""
+
+- set_fact: old_uc_volume_id={{ uc_volume_id_2.stdout }}
+  when: hagroup is defined and vm_type == 'ts' and old_volumes_in_single_stack == True and uc_volume_id_1.stdout ==""
+
+- name: "Find the AtlasVM"
+  shell: nova list |grep -i {{ atlas_name |default('atlas') }} | awk -F '|' '{print $2}' | sed 's/^[ ]*//'
+  when: action == "deploy_openstack" and vm_type == 'tools'
+  ignore_errors: yes
+  register: atlasvm_id
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+
+- name: "Find the zone hosting the AtlasVM"
+  shell: nova show {{ atlasvm_id.stdout }} | grep availability_zone | awk -F '|' '{print $3}' | sed 's/^[ ]*//'
+  when: action == "deploy_openstack" and vm_type == 'tools'
+  ignore_errors: yes
+  register: atlasvm_zone
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Find the blade hosting the AtlasVM"
+  shell: nova show {{ atlasvm_id.stdout }} | grep OS-EXT-SRV-ATTR:host | awk -F '|' '{print $3}' | sed 's/^[ ]*//'
+  when: action == "deploy_openstack" and vm_type == 'tools'
+  ignore_errors: yes
+  register: atlasvm_host
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Assign zones for ToolsVM"
+  set_fact: toolsvm_zone={{ atlasvm_zone.stdout }}
+  when: action == "deploy_openstack" and vm_type == 'tools'
+
+- name: "Assign host for ToolsVM"
+  set_fact: toolsvm_host={{ atlasvm_host.stdout }}
+  when: action == "deploy_openstack" and vm_type == 'tools'
+
+- name: "Generating HOT for each VM: hagroup is defined"
+  when: (action == "deploy_openstack") and (manage_vms | default('True') == 'True') and (hagroup is defined)
+  action: template src="{{ vm_type }}-gen.yaml" dest="{{ output_folder_remote }}/heat/temp/{{ hagroup }}/{{ vm_name }}.yaml"
+#  action: template src="{{ item | regex_replace('^(.*)-.*$', '\\1') }}-gen.yaml" dest="{{ output_folder_remote }}/heat/temp/{{ hagroup }}/{{ item }}.yaml"
+#  with_items:  
+#     -  "{{ vm_name }}" 
+
+# name: "Generating HOT for each VM: no hagroup"
+#  when: (action == "deploy_openstack") and (manage_vms | default('True') == 'True') and (hagroup is not defined)
+#  action: template src="{{ vm_type }}-gen.yaml" dest="{{ output_folder_remote }}/heat/temp/{{ vm_name }}.yaml"
+#  action: template src="{{ item | regex_replace('^(.*)-.*$', '\\1') }}-gen.yaml" dest="{{ output_folder_remote }}/heat/temp/{{ item }}.yaml"
+#  with_items:
+#     -  "{{ vm_name }}"
+

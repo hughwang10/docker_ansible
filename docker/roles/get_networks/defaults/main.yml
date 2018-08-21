@@ -1,0 +1,50 @@
+# Default value for the configuration
+# These values are taken from the miit tool default configuration
+---
+
+site_name: "regression3"
+site_dir: "site_spec"
+vars_dir: "vars"
+deploy_platform: "deploy_vbox"
+
+create_vars_file: "./{{ vars_dir }}/create_vars.yml"
+misc_vars_file: "./{{ vars_dir }}/misc.yml"
+networks_vars_file: "./{{ vars_dir }}/networks.yml"
+networks_vars_file2: "./{{ vars_dir }}/networks_{{ site_name }}.yml"
+networks_vars_file3: "{{ networks_vars_file1 | default() }}"
+network_vars_files: [ "{{ networks_vars_file1 | default(networks_vars_file2) }}", "{{ networks_vars_file2 }}", "{{ networks_vars_file }}" ]
+
+site_vars_file: "./{{ site_dir }}/{{ site_name }}.yml"
+include_vars_files_file: "./{{ site_dir }}/{{ site_name }}_vars_files.yml"
+
+output_directory: "{{ rel_base_path | default('../..') }}/system-config/inventory/"
+networks: {}
+networks_names:
+- oam
+- internal
+- access
+- internet
+- access_ingress
+- internet_ingress
+- controlplanesig 
+
+oam_all_ips: []
+internal_all_ips: []
+access_all_ips: []
+internet_all_ips: []
+access_ingress_all_ips: []
+internet_ingress_all_ips: []
+controlplanesig_all_ips: []
+
+vmnic_0: "eth0"
+vmnic_1: "eth1"
+vmnic_2: "eth2"
+vmnic_3: "eth3"
+vmnic_4: "eth4"
+vmnic_5: "eth5"
+vmnic_0_edev: "eth0"
+vmnic_1_edev: "eth1"
+vmnic_2_edev: "eth2"
+vmnic_3_edev: "eth3"
+vmnic_4_edev: "eth4"
+vmnic_5_edev: "eth5"

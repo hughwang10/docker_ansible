@@ -1,0 +1,10 @@
+{% set type_list = ['mn', 'dk', 'ts', 'ddc', 'mon', 'slb', 'vom', 'cim', 'custom', 'tools', 'da'] %}
+
+{% for type in type_list %}
+
+[{{type}}]
+{% for host in groups[type] | default([]) %}
+{{hostvars[host]['oam_ip']}} nv_name={{host}} nv_type={{type}}
+{% endfor %}
+
+{% endfor %}

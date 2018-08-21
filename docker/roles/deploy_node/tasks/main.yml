@@ -1,0 +1,81 @@
+---
+# tasks file for deploy_node
+
+- name: Getting the node
+  set_fact:
+    node: "{{nodes.values()[node_index]}}"
+
+- name: Assign the IP
+  set_fact:
+    node: "{{node|add(('192.168.10.10'| ipaddr('address') | ipaddr('int') + node_index)|ipaddr('address'), 'ip')}}"
+
+- name: Generating the PXE Configuration
+  template: "src=pxe.jinja dest=/srv/tftpboot/pxelinux.cfg/01-{{node.mac[0].replace(':', '-')}} mode=0666"
+  with_items:
+    - { default: "{{node_type}}" }
+  sudo: yes
+
+- name: Shutting down the Node
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    state: "Off"
+
+- name: Setup Node Boot
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    boot: ['M.2']
+  register: cmd_result
+  ignore_errors: yes
+
+- name: Setup Node Boot
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    boot: ['HDD']
+  when: cmd_result | failed
+
+- name: Setup Node BootOnce
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    boot: 'PXE'
+    once: true
+
+- name: Create cloudinit datasource dir 
+  file: "path=/tmp/cloudinit/config/{{node.ip}} state=directory"
+
+
+# For now the same configuration files are copied to all nodes
+# If you deploy multiple nodes ou should manually modify the IP address of a least one of them
+- name: Copy the configuration files 1/2
+  copy: src=user-data dest=/tmp/cloudinit/config/{{node.ip}}
+
+- name: Copy the configuration files 2/2
+  copy: src=meta-data dest=/tmp/cloudinit/config/{{node.ip}}
+
+- name: Copy the HTTP Server
+  copy: src=cloudinit.py dest=/tmp/cloudinit mode=0777
+
+- name: Launch the HTTP Server #This is never stopped by the script
+  shell: "cd /tmp/cloudinit&& nohup /tmp/cloudinit/cloudinit.py > /dev/null 2>&1 & echo $! > /tmp/cloudinit.pid"
+
+- name: Wait 10s for the Node to be stopped
+  wait_for: timeout=10
+
+- name: Boot Node (and pray)
+  moonshot_cmd:
+    username: "{{ilo_username}}"
+    password: "{{ilo_password}}"
+    address: "{{ilo_address}}"
+    node_uri: "{{node.self}}"
+    state: "On"

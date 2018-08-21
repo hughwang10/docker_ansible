@@ -1,0 +1,3 @@
+---
+# vars file for report
+www_folder: "{{ base_path + ('/../' if outputdir|length > 0  else '') }}/{{ system_deploy_subfolder | default('www') }}/{{ outputdir }}"

@@ -1,0 +1,18 @@
+# Perform ping toward hosts and gather results
+---
+
+- name: Warm up the ARP table
+  command: "ping -c 1 -I {{interface}} {{item}}"
+  with_items:
+  - "{{destinations}}"
+  ignore_errors: yes
+  tags:
+    - warmup
+
+- name: "Ping test {{interface}}"
+  nv_ping: iface={{interface}} dest={{item}} count={{count}} timeout={{timeout}} size={{size}} interval={{interval}}
+  when: item not in ansible_all_ipv4_addresses # The host should not ping himself
+  with_items:
+  - "{{destinations}}"
+  register: test_result
+  ignore_errors: yes

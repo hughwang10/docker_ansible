@@ -1,0 +1,172 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm_deploy_baremetal
+
+- name: "Creates deploy VM disk directory" 
+  file: path={{ output_folder_remote }}/vm state=directory
+
+- name: "Creates deploy www  disk directory"
+  file: path={{ www_folder_remote }}/vm state=directory mode="u=rwx,g=rx,o=rx" follow=yes
+
+- name: "Find the latest vmdk"
+  local_action: shell ls -t {{ vm_vmdk }} | head -1
+  register: cmd1_result
+  when: deployment_phase in [ "all", "one" ] 
+
+- name: "Find the latest vmdk, normalize the path"
+  local_action: shell readlink -m {{ cmd1_result.stdout }}
+  register: cmd_result
+  when: deployment_phase in [ "all", "one" ] 
+
+- name: "Assign var ..."
+  set_fact: file_result={{ cmd_result.stdout | basename }}
+  when: deployment_phase in [ "all", "one" ] 
+
+- name: "Copy '{{ cmd_result.stdout }}' to deploy host"
+  action: copy src={{ cmd_result.stdout }} dest="{{ output_folder_remote }}/vm/{{ file_result }}"
+  run_once: True 
+  when: deployment_phase in [ "all", "one" ]
+
+- name: "Check if file already exists"
+  stat: path={{ www_folder_remote }}/vm/{{ file_result }}
+  register: www_image_file
+  when: deployment_phase in [ "all", "one" ] 
+
+- name: "Copy '{{ cmd_result.stdout }}' to www folder"
+  action: command cp {{ output_folder_remote }}/vm/{{ file_result }}  {{ www_folder_remote }}/vm/{{ file_result }}
+  when: deployment_phase in [ "all", "one" ] and www_image_file.stat.exists != True
+
+- name: "Changes permission on the iso image file"
+  file: path={{ www_folder_remote }}/vm/{{ file_result }} state=file mode="u=rwx,g=rx,o=rx" follow=yes
+  when: deployment_phase in [ "all", "one" ] 
+
+- name: msg="Attach VM image ISO file to HP iLO virtual drive no fail safe"
+  hpilo_boot:
+    host: "{{ execution_host }}"
+    login: "{{ baremetal_hpilouser }}"
+    password: "{{ baremetal_hpilopassword }}"
+    state: "boot_once"
+    force: "yes"
+    media: "cdrom"
+    image: "http://{{ msp_tools_vm_ip }}/miit{{ www_rel_output_path }}/system-config/vm/{{ file_result }}"
+  ignore_errors: yes
+  when: (deployment_phase in [ "all", "one" ]) and (ignore_hosterrors | default('False') == "True")
+
+- name: msg="Attach VM image ISO file to HP iLO virtual drive"
+  hpilo_boot:
+    host: "{{ execution_host }}"
+    login: "{{ baremetal_hpilouser }}"
+    password: "{{ baremetal_hpilopassword }}"
+    state: "boot_once"
+    force: "yes"
+    media: "cdrom"
+    image: "http://{{ msp_tools_vm_ip }}/miit{{ www_rel_output_path }}/system-config/vm/{{ file_result }}"
+  when: (deployment_phase in [ "all", "one" ])  and (ignore_hosterrors | default('False') != "True")
+
+- name: "Wait for next"
+  local_action: shell sleep {{ baremetal_phase1_delay | default('1') }}s
+  when:  deployment_phase in [ "all", "one" ] 
+
+- name: "Normalize path to .iso file non MN .. "
+  local_action: shell readlink -m "{{ output_folder }}/{{ vm_type }}/seed-{{ deploy_address }}_{{ vm_name_deploy }}.iso"
+  register: cmd_result3
+  when: vm_type != "mn" and deployment_phase in [ "all", "two" ] 
+
+- name: "Copy data to target server non MN"
+  action: copy src={{ cmd_result3.stdout }} dest={{ output_folder_remote }}
+  when: vm_type != "mn" and deployment_phase in [ "all", "two" ] 
+
+- name: "Copy IID file to www folder"
+  action: command cp {{ output_folder_remote }}/seed-{{ deploy_address }}_{{ vm_name_deploy }}.iso  {{ www_folder_remote }}/seed-{{ deploy_address }}_{{ vm_name_deploy }}.iso
+  when: vm_type != "mn" and deployment_phase in [ "all", "two" ] 
+
+- name: "Changes permission on the iso image file"
+  file: path={{ www_folder_remote }}/seed-{{ deploy_address }}_{{ vm_name_deploy }}.iso state=file mode="u=rwx,g=rx,o=rx" follow=yes
+  when: vm_type != "mn" and deployment_phase in [ "all", "two" ] 
+
+- name: "Normalize path to .iso file"
+  local_action: shell readlink -m "{{ output_folder }}/{{ vm_type }}/seed-{{ mn_config_type }}_{{ vm_name_deploy }}.iso"
+  register: cmd_result4
+  when: vm_type == "mn" and deployment_phase in [ "all", "two" ] 
+
+- name: "Copy data to target server MN"
+  action: copy src={{ cmd_result4.stdout }} dest={{ output_folder_remote }}
+  when: vm_type == "mn" and deployment_phase in [ "all", "two" ] 
+
+- name: "Copy to www folder"
+  action: command cp {{ output_folder_remote }}/seed-{{ mn_config_type }}_{{ vm_name_deploy }}.iso  {{ www_folder_remote }}/seed-{{ mn_config_type }}_{{ vm_name_deploy }}.iso
+  when: vm_type == "mn" and deployment_phase in [ "all", "two" ] 
+
+- name: "Changes permission on the iso image file"
+  file: path={{ www_folder_remote }}/seed-{{ mn_config_type }}_{{ vm_name_deploy }}.iso state=file mode="u=rwx,g=rx,o=rx" follow=yes
+  when: vm_type == "mn" and deployment_phase in [ "all", "two" ] 
+
+- name: "Wait for boot and then attach config iso"
+  local_action: shell sleep {{ baremetal_boot_delay }}s
+  when:  deployment_phase in [ "all" ] 
+
+- name: msg="Attach IID .iso file to HP iLO MN node no fail safe"
+  hpilo_boot:
+    host: "{{ baremetal_hpilohostnames[0] }}"
+    login: "{{ baremetal_hpilouser }}"
+    password: "{{ baremetal_hpilopassword }}"
+    state: "connect"
+    force: "yes"
+    media: "cdrom"
+    image: "http://{{ msp_tools_vm_ip }}/miit{{ www_rel_output_path }}/system-config/seed-{{ mn_config_type }}_{{ vm_name_deploy }}.iso"
+  ignore_errors: yes
+  when: vm_type == "mn" and deployment_phase in [ "all", "two" ] and (ignore_hosterrors | default('False') == "True")
+
+- name: msg="Attach IID .iso file to HP iLO MN node"
+  hpilo_boot:
+    host: "{{ baremetal_hpilohostnames[0] }}"
+    login: "{{ baremetal_hpilouser }}"
+    password: "{{ baremetal_hpilopassword }}"
+    state: "connect"
+    force: "yes"
+    media: "cdrom"
+    image: "http://{{ msp_tools_vm_ip }}/miit{{ www_rel_output_path }}/system-config/seed-{{ mn_config_type }}_{{ vm_name_deploy }}.iso"
+  when: vm_type == "mn" and deployment_phase in [ "all", "two" ] and (ignore_hosterrors | default('False') != "True")
+
+- name: msg="Attach IID .iso file to HP iLO non MN no fail safe"
+  hpilo_boot:
+    host: "{{ execution_host }}"
+    login: "{{ baremetal_hpilouser }}"
+    password: "{{ baremetal_hpilopassword }}"
+    state: "connect"
+    force: "yes"
+    media: "cdrom"
+    image: "http://{{ msp_tools_vm_ip }}/miit{{ www_rel_output_path }}/system-config/seed-{{ deploy_address }}_{{ vm_name_deploy }}.iso"
+  ignore_errors: yes
+  when: vm_type != "mn" and deployment_phase in [ "all", "two" ] and (ignore_hosterrors | default('False') == "True")
+
+- name: msg="Attach IID .iso file to HP iLO non MN"
+  hpilo_boot:
+    host: "{{ execution_host }}"
+    login: "{{ baremetal_hpilouser }}"
+    password: "{{ baremetal_hpilopassword }}"
+    state: "connect"
+    force: "yes"
+    media: "cdrom"
+    image: "http://{{ msp_tools_vm_ip }}/miit{{ www_rel_output_path }}/system-config/seed-{{ deploy_address }}_{{ vm_name_deploy }}.iso"
+  when: vm_type != "mn" and deployment_phase in [ "all", "two" ] and (ignore_hosterrors | default('False') != "True")
+
+- name: "Wait for next ..."
+  local_action: shell sleep {{ baremetal_phase2_delay | default('5') }}s
+  when:  deployment_phase in [ "all", "two" ] 
+
+
+
+
+

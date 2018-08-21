@@ -1,0 +1,215 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+##
+# Generate VM config user-data, meta-data and iso
+# 
+
+#
+# Config generation
+#
+- set_fact: vm_name_deploy="{{ vm_name + system_versiontag }}"
+  when: afg_deployment_type == "HA"
+
+- set_fact: vm_name_deploy="{{ clusterid }}-{{ vm_type }}{{ system_versiontag }}"
+  when: afg_deployment_type in ["SA", "ABC"]
+
+- name: "Setting the cartridge number as a fact"
+  set_fact:
+    cartridge_number: "{{ (nodes.values()[execution_host_index|int]).self.split('/')[-1] | regex_replace('^\\D(\\d+)\\D\\d*$', '\\\\1') }}"
+  when: deploy_platform == "deploy_moonshot"
+
+- name: "Setting facts based on cartridge number"
+  set_fact:
+    vm_name_deploy: "{{ vm_type }}-{{ cartridge_number}}{{ system_versiontag }}"
+    vm_name: "{{ vm_type }}-{{ cartridge_number }}"
+  when: deploy_platform == "deploy_moonshot"
+
+- debug: msg="{{ vm_name_deploy }}"
+
+- local_action: set_fact deploy_platform="{{ action | default('deploy_vbox') }}"
+  when: deploy_platform is not defined
+
+- include_vars: "{{ deploy_address }}_vars.yml"
+
+- name: Creates  {{ vm_type }} {{ vm_name_deploy }} directory
+  local_action: file path={{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ deploy_address }} state=directory
+  when: vm_type != "mn"
+
+- name: Creates  {{ vm_type }} directory
+  local_action: file path={{ output_folder }}/{{ vm_type }} state=directory
+  when: vm_type == "mn"
+
+- name: Creates  {{ vm_type }} directory on remote server
+  action: file path={{ output_folder_remote }}/{{ vm_type }} state=directory
+  register: result1
+  ignore_errors: True
+
+- name: Creates  {{ vm_type }} directory on remote server with sudo rights requires -k2 parameter
+  action: file path={{ output_folder_remote }}/{{ vm_type }} state=directory
+  become: yes
+  become_method: sudo 
+  when: result1 | failed
+
+- name: Changes permission on directory on remote server
+  action: shell chown -R {{ userid }} {{ output_folder_remote }} 
+  become: yes
+  become_method: sudo 
+  when: result1 | failed
+
+- name: "Generate nic custom udev rules file"
+  local_action: template src=10-local.rules.ansible dest={{ output_folder }}/{{ vm_type }}/10-local.rules mode=0777
+  when: vmnic_devs is defined
+# and action=="deploy_baremetal"
+
+- name: "Generate encrypted password for msa"
+  local_action: shell echo -n {{ authpasswd }} | md5sum
+  register: encrypt_output1
+  ignore_errors: yes
+
+- name: "Assign passwd variable"
+  set_fact: encpasswd_msa="{{ encrypt_output1.stdout | regex_replace('^([a-z,0-9]+).*$', '\\1') | default('9557ed4a37e9dca079d77871b9a2998d') }}"
+
+- name: "Generate encrypted password for clients"
+  local_action: shell openssl passwd -crypt -salt 60 {{ authpasswd }}
+  register: encrypt_output2
+  ignore_errors: yes
+
+- name: "Assign passwd variable"
+  set_fact: encpasswd_openssl="{{ encrypt_output2.stdout | default('6041A28W2rLq6') }}"
+
+- name: "Read 10-local.rules"
+  local_action: shell cat {{ output_folder }}/{{ vm_type }}/10-local.rules
+  register: udevlocalrules
+  when: vmnic_devs is defined
+
+- name: ""
+  stat: path={{ xlfile | default('vars/xlfile.yml') }}
+  register: xl_file
+  when: vm_type in [ "dk", "ts" ]
+
+- name:  ""
+  local_action: shell cat {{ xlfile | default('vars/xlfile.yml') }}
+  register: xlfile_catout
+  when: vm_type in [ "dk", "ts" ] and xl_file.stat.exists == True
+
+- name: ""
+  set_fact: xlfile_content="{{ xlfile_catout.stdout }}"
+  when: vm_type in [ "dk", "ts" ] and xl_file.stat.exists == True 
+
+- local_action: stat path="{{ path_to_images | default(path_to_images_i) | dirname }}/archive/traffic_regulator_dev"
+  register: ts_extrafile
+  when: vm_type in [ "dk", "ts" ]
+
+- name: "Copy extra file to ts"
+  local_action: shell cp {{ path_to_images | default(path_to_images_i) }}/traffic_regulator_dev {{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ deploy_address }}/traffic_regulator
+  when: vm_type in [ "dk", "ts" ] and ts_extrafile.stat.exists == True
+
+- name: "Generate xx-meta-data"
+  local_action: template src=meta-data.ansible dest={{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ deploy_address }}/meta-data mode=0777
+  with_items:
+  - { instance_id: 'instance-{{ vm_name_deploy }}', hostname: '{{ vm_name }}' }
+  when: vm_type != "mn"
+
+- name: "Generate xx-user-data"
+  local_action: template src={{ user_data_template_file | default('user-data.ansible') }} dest={{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ deploy_address }}/user-data mode=0777
+  when: vm_type != "mn"
+
+- name: "Generate xx-seed iso"
+  local_action: shell /usr/bin/genisoimage -output {{ output_folder }}/{{ vm_type }}/seed-{{ deploy_address }}_{{ vm_name_deploy }}.iso -volid cidata -joliet -rock {{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ deploy_address }}
+  when: vm_type != "mn"
+
+- name: "Remove extra file from build dir"
+  local_action: shell rm -f {{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ deploy_address }}/traffic_regulator
+  when: vm_type in [ "dk", "ts" ] and ts_extrafile.stat.exists == True
+
+- name: Creates  {{ vm_type }} {{ vm_name_deploy }} directory
+  local_action: file path={{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ item.mn_config_type }} state=directory
+  with_items:
+  - { mn_config_type: "firstinstall"}
+  - { mn_config_type: "upgrade"}
+  when: vm_type == "mn"
+
+- name: "Generate clusters.json"
+  local_action: template src=clusters.json-template.ansible dest={{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ item.mn_config_type }}/clusters.json mode=0777
+  with_items:
+  - { instance_id: 'instance-{{ vm_name_deploy }}', hostname: '{{ vm_name }}', mn_config_type: "firstinstall"}
+  - { instance_id: 'instance-{{ vm_name_deploy }}', hostname: '{{ vm_name }}', mn_config_type: "upgrade"}
+  when: vm_type == "mn" and clusters is defined
+
+- name: "Read clusters.json"
+  local_action: shell cat {{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-firstinstall/clusters.json
+  register: clusters_file
+  when: vm_type == "mn" and clusters is defined
+
+- name: "Generate xx-meta-data"
+  local_action: template src=meta-data.ansible dest={{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ item.mn_config_type }}/meta-data mode=0777
+  with_items:
+  - { instance_id: 'instance-{{ vm_name_deploy }}', hostname: '{{ vm_name }}', mn_config_type: "firstinstall"}
+  - { instance_id: 'instance-{{ vm_name_deploy }}', hostname: '{{ vm_name }}', mn_config_type: "upgrade"}
+  when: vm_type == "mn"
+
+- name: "Generate xx-user-data"
+  local_action: template src=user-data.ansible dest={{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ item.mn_config_type }}/user-data mode=0777
+  with_items:
+  - { mn_config_type: "firstinstall"}
+  - { mn_config_type: "upgrade"}
+  when: vm_type == "mn"
+
+- name: "Generate xx-seed iso"
+  local_action: shell /usr/bin/genisoimage -output {{ output_folder }}/{{ vm_type }}/seed-{{ item.mn_config_type }}_{{ vm_name_deploy }}.iso -volid cidata -joliet -rock {{ output_folder }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ item.mn_config_type }}
+  with_items:
+  - { mn_config_type: "firstinstall"}
+  - { mn_config_type: "upgrade"}
+  when: vm_type == "mn"
+
+#
+#  update inventory
+#
+
+- name: "Add ip to host variables"
+  local_action: add_host name={{ vm_name }} groups={{ vm_type }} servername={{ vm_name_deploy }} int_ip={{ internal_ip }} acc_ip={{ access_ip | default("") }} inet_ip={{ internet_ip | default("") }} acc_in_ip={{ accessingress_ip | default("") }} inet_in_ip={{ internetingress_ip | default("") }} cp_sig_ip={{ controlplanesig_ip | default("") }} oam_ip={{ oam_ip | default("") }}
+
+- name: "Copy data to target server"
+  action: copy src="{{ output_folder }}/{{ vm_type }}/{{ item }}" dest={{ output_folder_remote }}/{{ vm_type }}
+  ignore_errors: yes
+  with_items: 
+   - "{{ vm_name_deploy }}-firstinstall" 
+   - "{{ vm_name_deploy }}-upgrade" 
+  when: vm_type == "mn"
+
+- name: "Copy data to target server"
+  action: copy src="{{ output_folder }}/{{ vm_type }}/{{ item }}/" dest={{ output_folder_remote }}/{{ vm_type }}
+  ignore_errors: yes
+  with_items: 
+   - "seed-firstinstall_{{ vm_name_deploy }}.iso"
+   - "seed-upgrade_{{ vm_name_deploy }}.iso"
+  when: vm_type == "mn"
+
+- name: "Copy data to target server"
+  action: copy src="{{ output_folder }}/{{ vm_type }}/{{ item }}/" dest={{ output_folder_remote }}/{{ vm_type }}
+  ignore_errors: yes
+  with_items: 
+   - "seed-{{ deploy_address }}_{{ vm_name_deploy }}.iso" 
+  when: vm_type != "mn"
+
+- name: "Copy data to target server"
+  action: copy src="{{ output_folder }}/{{ vm_type }}/{{ item }}" dest={{ output_folder_remote }}/{{ vm_type }}
+  ignore_errors: yes
+  with_items: 
+   - "{{ vm_name_deploy }}-{{ deploy_address }}"
+  when: vm_type != "mn"
+
+
+
+

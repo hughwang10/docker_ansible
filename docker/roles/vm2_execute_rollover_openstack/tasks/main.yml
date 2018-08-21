@@ -1,0 +1,237 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm2_upgrade_vbox
+
+- stat: path={{ output_folder_remote_old }}
+  register: old_deploy_folder
+
+- fail: msg="Error, old deploy folder does not exists, check where old deployment folder is located."
+  when: old_deploy_folder.stat.isdir is defined and old_deploy_folder.stat.isdir != True
+
+- debug: msg="Build template file for Rollover/1"
+  when: ( hagroup != 'all_groups' )
+
+- name: "mkdir rollover/1"
+  action: file path={{ output_folder_remote }}/rollover/1/temp state=directory
+  when: ( upgrade_method | default('bulk') == 'bulk')
+  ignore_errors: yes
+
+- name: "clean temp dir"
+  shell: rm {{ output_folder_remote }}/rollover/1/temp/*
+  when: ( upgrade_method | default('bulk') == 'bulk')
+  ignore_errors: yes
+
+- name: "mkdir rollover/1 for {{ hagroup }}"
+  action: file path={{ output_folder_remote }}/rollover/1/temp/{{ hagroup }} state=directory
+  when: ( upgrade_method | default('bulk') == 'bulk') and ( hagroup != 'all_groups' )
+  ignore_errors: yes
+
+- name: "clean temp dir"
+  shell: rm {{ output_folder_remote }}/rollover/1/temp/{{ hagroup }}/
+  when: ( upgrade_method | default('bulk') == 'bulk') and ( hagroup != 'all_groups' )
+  ignore_errors: yes
+
+- name: "copy {{ output_folder_remote }}/upgrade/1/temp/{{ hagroup }} to {{ output_folder_remote }}/rollover/1/temp/{{ hagroup }}"
+  shell: cp {{ output_folder_remote }}/upgrade/1/temp/{{ hagroup }}/*.yaml {{ output_folder_remote }}/rollover/1/temp/{{ hagroup }}/
+  when: ( upgrade_method | default('bulk') == 'bulk') and ( hagroup != 'all_groups' )
+  ignore_errors: yes
+
+- name: "Assemble template file for rollover/1, {{ hagroup }}"
+  action: assemble dest="{{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}_{{ hagroup }}.orig" src="{{ output_folder_remote}}/rollover/1/temp/{{ hagroup }}"
+  when: ( upgrade_method | default('bulk') == 'bulk') and ( hagroup != 'all_groups' )
+
+- name: "Transfer the depends.py script"
+  copy: src=depends.py dest={{ output_folder_remote }}/rollover/1/ mode=0755
+  when: ( upgrade_method | default('bulk') == 'bulk')
+
+- name: "Add dependency per resource_creation_channels"
+  action: shell python {{ output_folder_remote }}/rollover/1/depends.py -f {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}_{{ hagroup }}.orig -o {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}_{{ hagroup }}.depends -t {{ resource_creation_channels | default('0') }}
+  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0') and ( hagroup != "all_groups" )
+
+- name: "Use {{ os_msptemplate }}_{{ hagroup }}.depends as {{ os_msptemplate }}_{{ hagroup }}"
+  shell: mv {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}_{{ hagroup }}.depends {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}_{{ hagroup }}
+  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0') and ( hagroup != "all_groups" )
+
+- name: "Use {{ os_msptemplate }}_{{ hagroup }}.orig as {{ os_msptemplate }}_{{ hagroup }}"
+  shell: mv {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}_{{ hagroup }}.orig {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}_{{ hagroup }}
+  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') == '0') and ( hagroup != "all_groups" )
+ 
+- debug: msg="template file for rollover/1 is ready now"
+  when: (( upgrade_method | default('bulk') ) == 'bulk') and ( hagroup != 'all_groups' )
+
+- name: "sleep a while"
+  shell: sleep 60
+  when: (( upgrade_method | default('bulk') ) == 'bulk') and ( hagroup != 'all_groups' ) and ( cee_dryrun | default('False') == 'False')
+
+- name: "using python-heatclient heat stack-update - Bulk Upgrade, hagroup {{ hagroup }}"
+  when: (action == "deploy_openstack") and (upgrade_method | default('bulk') == 'bulk') and ( hagroup != "all_groups" ) and ( cee_dryrun | default('False') == 'False') and ( use_heat_env_file | default('False') == 'False' )
+  action: shell heat stack-update -f {{output_folder_remote }}/rollover/1/{{ os_msptemplate }}_{{ hagroup }} {{ os_stackname }}_{{ hagroup }}
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "using python-heatclient heat stack-update - Bulk Upgrade, hagroup {{ hagroup }}"
+  when: (action == "deploy_openstack") and (upgrade_method | default('bulk') == 'bulk') and ( hagroup != "all_groups" ) and ( cee_dryrun | default('False') == 'False') and ( use_heat_env_file | default('False') == 'True' )
+  action: shell heat stack-update -f {{output_folder_remote }}/rollover/1/{{ os_msptemplate }}_{{ hagroup }} -e {{ output_folder_remote_old}}/heat/{{ os_stackname }}_heat_env_file {{ os_stackname }}_{{ hagroup }}
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait till the stack update completed - Bulk Deployment"
+  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( hagroup != "all_groups" ) and ( cee_dryrun | default('False') == 'False' )
+  action: shell heat stack-list |grep -w {{ os_stackname }}_{{ hagroup }}
+  register: result
+  until: result.stdout.find("COMPLETE") !=-1
+  retries: 10000
+  delay:  5
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- debug: msg="rollover/1 is done"
+  when: (( upgrade_method | default('bulk') ) == 'bulk') and ( hagroup != 'all_groups' )
+
+- name: "sleep a while"
+  shell: sleep 60
+  when: (( upgrade_method | default('bulk') ) == 'bulk') and ( hagroup != 'all_groups' ) and ( cee_dryrun | default('False') == 'False' )
+
+- debug: msg="Build template file for rollover/2"
+  when: ( hagroup != 'all_groups' )
+
+- name: "mkdir rollover/2"
+  action: file path={{ output_folder_remote }}/rollover/2/temp state=directory
+  ignore_errors: yes
+
+- name: "clean the dir"
+  shell: rm {{ output_folder_remote }}/rollover/2/temp/*
+  ignore_errors: yes
+
+- name: "mkdir rollover/2, for hagroup {{ hagroup }}"
+  action: file path={{ output_folder_remote }}/rollover/2/temp/{{ hagroup }} state=directory
+  when: ( hagroup != 'all_groups' )
+  ignore_errors: yes
+
+- name: "clean the dir, for hagroup {{ hagroup }}"
+  shell: rm {{ output_folder_remote }}/rollover/2/temp/{{ hagroup }}/*
+  when: ( hagroup != 'all_groups' )
+  ignore_errors: yes
+
+- name: "Copy template file from {{ output_folder_remote }}/heat to rollover/2, for hagroup {{ hagroup }}"
+  shell: cp -R {{ output_folder_remote_old }}/heat/temp/{{ hagroup }}/*.yaml {{ output_folder_remote }}/rollover/2/temp/{{ hagroup }}/
+  when: ( upgrade_method | default('bulk')) == 'bulk' and ( hagroup != 'all_groups' )
+
+- name: "Find mn-01.yaml in rollover/2/temp"
+  shell: ls {{ output_folder_remote }}/rollover/2/temp/{{ hagroup }}/mn-01.yaml
+  when: ( hagroup != 'all_groups' )
+  register: file_result
+  ignore_errors: yes
+
+- name: "Replace firstinstall in mn-01.yaml file"
+  shell: sed 's/firstinstall/upgrade/g' {{ output_folder_remote }}/rollover/2/temp/{{ hagroup }}/mn-01.yaml >{{ output_folder_remote }}/rollover/2/temp/{{ hagroup }}/mn-01.yaml.upgrade
+  ignore_errors: yes
+  when: ( hagroup != 'all_groups' ) and ( file_result.stdout != "" )
+
+- name: "Remove the old mn-01.yaml file"
+  shell: rm {{ output_folder_remote }}/rollover/2/temp/{{ hagroup }}/mn-01.yaml
+  ignore_errors: yes
+  when: ( hagroup != 'all_groups' ) and ( file_result.stdout != "" )
+
+- name: "Get upgrade mn-01.yaml file"
+  shell: mv {{ output_folder_remote }}/rollover/2/temp/{{ hagroup }}/mn-01.yaml.upgrade {{ output_folder_remote }}/rollover/2/temp/{{ hagroup }}/mn-01.yaml
+  ignore_errors: yes
+  when: ( hagroup != 'all_groups' ) and ( file_result.stdout != "" )
+
+- name: "Assemble template file for rollover/2, {{ hagroup }}"
+  action: assemble dest="{{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}_{{ hagroup }}.orig" src="{{ output_folder_remote}}/rollover/2/temp/{{ hagroup }}"
+  when: ( upgrade_method | default('bulk') == 'bulk') and ( hagroup != 'all_groups' )
+
+- name: "Transfer the depends.py script"
+  copy: src=depends.py dest={{ output_folder_remote }}/rollover/2/ mode=0755
+  when: ( upgrade_method | default('bulk') == 'bulk')
+
+- name: "Add dependency per resource_creation_channels"
+  action: shell python {{ output_folder_remote }}/rollover/2/depends.py -f {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}_{{ hagroup }}.orig -o {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}_{{ hagroup }}.depends -t {{ resource_creation_channels | default('0') }}
+  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0') and ( hagroup != "all_groups" )
+
+- name: "Use {{ os_msptemplate }}_{{ hagroup }}.depends as {{ os_msptemplate }}_{{ hagroup }}"
+  shell: mv {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}_{{ hagroup }}.depends {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}_{{ hagroup }}
+  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0') and ( hagroup != "all_groups" )
+
+- name: "Use {{ os_msptemplate }}_{{ hagroup }}.orig as {{ os_msptemplate }}_{{ hagroup }}"
+  shell: mv {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}_{{ hagroup }}.orig {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}_{{ hagroup }}
+  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') == '0') and ( hagroup != "all_groups" )
+
+- debug: msg="template file for upgrade/2 is ready now"
+  when: (( upgrade_method | default('bulk') ) == 'bulk') and ( hagroup != 'all_groups' )
+
+- name: "sleep a while"
+  shell: sleep 60
+  when: (( upgrade_method | default('bulk') ) == 'bulk') and ( hagroup != 'all_groups' ) and ( cee_dryrun | default('False') == 'False' )
+
+- name: "using python-heatclient heat stack-update - Bulk Upgrade, hagroup {{ hagroup }}"
+  when: (action == "deploy_openstack") and (upgrade_method | default('bulk') == 'bulk') and ( hagroup != "all_groups" ) and ( cee_dryrun | default('False') == 'False' ) and ( use_heat_env_file | default('False') == 'False' )
+  action: shell heat stack-update -f {{output_folder_remote }}/rollover/2/{{ os_msptemplate }}_{{ hagroup }} {{ os_stackname }}_{{ hagroup }}
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "using python-heatclient heat stack-update - Bulk Upgrade, hagroup {{ hagroup }}"
+  when: (action == "deploy_openstack") and (upgrade_method | default('bulk') == 'bulk') and ( hagroup != "all_groups" ) and ( cee_dryrun | default('False') == 'False' ) and ( use_heat_env_file | default('False') == 'True' )
+  action: shell heat stack-update -f {{output_folder_remote }}/rollover/2/{{ os_msptemplate }}_{{ hagroup }} -e {{ output_folder_remote_old }}/heat/{{ os_stackname }}_heat_env_file {{ os_stackname }}_{{ hagroup }}
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait till the stack update completed - Bulk Deployment"
+  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( hagroup != "all_groups" ) and ( cee_dryrun | default('False') == 'False' )
+  action: shell heat stack-list |grep -w {{ os_stackname }}_{{ hagroup }}
+  register: result
+  until: (result.stdout.find("COMPLETE") !=-1) or (result.stdout.find("FAIL") !=-1)
+  retries: 10000
+  delay:  5
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Transfer the rollover_all_groups script for all_groups case"
+  copy: src=rollover_all_groups.sh dest={{ output_folder_remote }}/rollover/ mode=0755
+  when: ( upgrade_method | default('bulk') == 'bulk') and ( hagroup == "all_groups" )
+
+- name: "Rollover all hagroups via the rollover_all_groups script, refer to log file {{ output_folder_remote }}/rollover/rollover_all_groups.log"
+  command: "{{ output_folder_remote }}/rollover/rollover_all_groups.sh {{ output_folder_remote_old }}/heat {{ output_folder_remote }}/rollover {{ resource_creation_channels | default('0') }} {{ os_msptemplate }} {{ os_stackname }} {{ use_heat_env_file | default('False') }} {{ cee_dryrun | default('False') }}"
+  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( hagroup == "all_groups" )
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- debug: msg="Rollover/2 is done"
+  when: (( upgrade_method | default('bulk') ) == 'bulk') and ( hagroup != "all_groups" )
+
+- debug: msg="Rollover all hagroups is done"
+  when: (( upgrade_method | default('bulk') ) == 'bulk') and ( hagroup == "all_groups" )
+

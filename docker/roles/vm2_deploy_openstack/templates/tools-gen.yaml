@@ -1,0 +1,132 @@
+##############MSP VM {{ os_stackname }}-{{ vm_name_deploy }} ################################
+
+   oam_port_{{ vm_name_deploy }}:
+     type: {{ os_neutron_port_type }}
+     properties:
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+{% if infra_ext_ip is defined %}
+         network_id: { get_param: infra_ext_net_id }
+{% else %}
+         network_id: { get_param: oam_net_id }
+{% endif %}
+{% else %}
+{% if hostvars['oam_net_id']['filename'] != "" %}
+         network_id: {{ hostvars['oam_net_id']['filename'] }}
+{% else %}
+         network_id: "oam_net_id"
+{% endif %}
+{% endif %}
+{% else %}
+         network_id: { get_resource: oam_network }
+{% endif %}
+         fixed_ips:
+{% if infra_ext_ip is defined %}
+           - ip_address: {{ infra_ext_ip }}
+{% else %}
+           - ip_address: {{ oam_ip }}
+{% endif %}
+
+{% if infra_ext_ip is not defined %}
+   internal_port_{{ vm_name_deploy }}:
+     type: {{ os_neutron_port_type }}
+     properties:
+{% if managed_ips | default(False) | bool == True %}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+{% if infra_ext_ip is defined %}
+{% else %}
+         network_id: { get_param: internal_net_id }
+{% endif %}
+{% else %}
+{% if hostvars['internal_net_id']['filename'] != "" %}
+         network_id: {{ hostvars['internal_net_id']['filename'] }}
+{% else %}
+         network_id: "internal_net_id"
+{% endif %}
+{% endif %}
+{% else %}
+         network_id: { get_resource: internal_network }
+{% endif %}
+         fixed_ips:
+           - ip_address: {{ internal_ip }}
+{% else %}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+{% if infra_ext_ip is defined %}
+{% else %}
+         network_id: { get_param: internal_net_id }
+         fixed_ips:
+           - subnet_id: { get_param: internal_subnet_id }
+{% endif %}
+{% else %}
+{% if hostvars['internal_net_id']['filename'] != "" %}
+         network_id: {{ hostvars['internal_net_id']['filename'] }}
+         fixed_ips:
+           - subnet_id: {{ hostvars['internal_subnet_id']['filename'] }}
+{% else %}
+         network_id: "internal_net_id"
+         fixed_ips:
+           - subnet_id: "internal_subnet_id"
+{% endif %}
+{% endif %}
+{% else %}
+         network_id: { get_attr: [internal_network, my_net_id] }
+         fixed_ips:
+           - subnet_id: { get_attr: [internal_network, my_subnet_id] }
+{% endif %}
+{% endif %}
+{% endif %}
+
+   root_volume_{{ vm_name_deploy }}:
+      type: {{ os_cinder_volume_type }}
+      properties:
+         name: root_{{ vm_name_deploy }}
+         size:  {{ os_tools_vol_root_size }}
+{% if manage_templates | default("False") == "True" %}
+         source_volid: {{ hostvars[vm_type]['source_volid'] }}
+{% else %}
+         image: {{ hostvars[vm_type]['filename'] }}
+{% endif %}
+
+   tools_instance_{{ vm_name_deploy }}:
+    type: OS::Nova::Server
+    properties:
+      name: {{ os_stackname }}-{{ vm_name }}
+      image: {{ hostvars[vm_type]['filename'] }}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+      flavor: { get_param: tools_flavor_id }
+{% else %}
+{% if hostvars['tools_flavor_id']['filename'] != "" %}
+      flavor: {{ hostvars['tools_flavor_id']['filename'] }}
+{% else %}
+      flavor: "tools_flavor_id"
+{% endif %}
+{% endif %}
+{% else %}
+      flavor: {get_attr: [tools_flavor, my_flavor_id]}
+{% endif %}
+      block_device_mapping: [{"volume_id": { get_resource:  root_volume_{{ vm_name_deploy }} }, "device_name": vda}]
+      config_drive: "True"
+      user_data_format: RAW
+      user_data:
+        get_file: "{{ output_folder_remote }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ deploy_address }}/user-data"
+{% if toolsvm_zone is defined and toolsvm_host is defined %}
+      availability_zone: "{{ toolsvm_zone }}:{{ toolsvm_host }}"
+{% else %}
+{% if hagroup is defined and manage_aggregates | default(True) | bool == True %}
+      availability_zone: "{{ hagroup }}"
+{% else %}
+      availability_zone: "{{ tools_in_zone }}"
+{% endif %}
+{% endif %}
+{% if tools_scheduler_hints | bool == True %}
+      scheduler_hints:
+         "group": "{{ tools_server_group}}"
+{% endif %}
+      metadata:
+         "evacuation_policy": "NoEvacuation"
+      networks: [{port: { get_resource: oam_port_{{ vm_name_deploy }} } }{% if infra_ext_ip is not defined %},{port: { get_resource: internal_port_{{ vm_name_deploy }} }} {% endif %} ]
+ 
+

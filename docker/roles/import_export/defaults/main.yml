@@ -1,0 +1,4 @@
+---
+# defaults file for import_export
+export_name: export
+import_file: "{{output_dir}}/{{export_name}}.json"

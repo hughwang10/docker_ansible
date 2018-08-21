@@ -1,0 +1,77 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/prepare_custom_files
+
+- local_action: file path={{ output_folder }} state=directory mode=0755
+
+- local_action: stat path={{ output_folder }}/../custom-files
+  register: specific_custom_files
+
+- local_action: stat path=../../custom-files
+  register: general_custom_files
+  
+- name: "Create soft link" 
+  local_action: shell ln -s ../custom-files {{ output_folder }}/../custom-files 
+  when: not specific_custom_files.stat.exists and general_custom_files.stat.exists 
+
+- local_action: file path={{ output_folder }}/../custom-files state=directory mode=0755
+  when: not specific_custom_files.stat.exists and not general_custom_files.stat.exists 
+
+- name: Creates directory on remote server with sudo rights requires
+  action: file path={{ (output_folder_remote + '/../../') | realpath }} state=directory
+  register: result1
+  ignore_errors: True
+
+- name: Creates {{ vm_type }} directory on remote server with sudo rights requires -k2 parameter
+  action: file path={{ (output_folder_remote + '/../../') | realpath  }} state=directory
+  become: yes
+  become_method: sudo 
+  when: result1 | failed
+
+- name: Changes permission on directory on remote server
+  action: shell chown -R {{ userid }} {{ (output_folder_remote + '/../../') | realpath }} 
+  become: yes
+  become_method: sudo 
+  when: result1 | failed
+
+
+- action: stat path={{ output_folder }}/../custom-files
+  register: specific_custom_files2
+
+- name: "Normalize path to custom-files directory"
+  local_action: shell readlink -m "{{ output_folder }}/../custom-files"
+  register: cmd_result4
+
+- name: "Normalize path to to www ln"
+  action: shell readlink -m "{{ www_folder_remote_ln }}"
+  register: cmd_result7
+  when: specific_custom_files2.stat.exists and specific_custom_files2.stat.islnk == True
+
+- name: "Normalize path to to www no ln"
+  action: shell readlink -m "{{ www_folder_remote }}"
+  register: cmd_result6
+  when: specific_custom_files2.stat.islnk | default(False) != True
+
+- debug: msg="FILES- {{ cmd_result4.stdout }}  ---------  {{ cmd_result6.stdout | default(cmd_result7.stdout) }}"
+
+- name: "Change chmod on local host"
+  local_action: shell chmod -R 0755 {{ cmd_result4.stdout }}
+
+- name: "Copy data to deployment server"
+  copy: src={{ cmd_result4.stdout }}  dest={{ cmd_result6.stdout | default(cmd_result7.stdout) }} mode=755 follow=yes
+
+- name: "Change chmod on remote host"
+  action: shell chmod -R og+rx {{ cmd_result6.stdout | default(cmd_result7.stdout) }}
+
+

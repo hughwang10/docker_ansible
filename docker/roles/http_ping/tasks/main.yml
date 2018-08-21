@@ -1,0 +1,27 @@
+---
+# tasks file for http_ping
+
+- name: Copy the executable 
+  copy: src=http_ping dest=/tmp/http_ping mode=0700
+  run_once: yes
+
+- name: Find the internalAddress corresponding the interface
+  shell: "ip addr | awk '/inet/ && /{{interface}}/{sub(/\\/.*$/,\"\",$2); print $2}'"
+  register: internalAddress
+
+- name: Perform the http_ping
+  http_ping:
+    destination: "{{item}}"
+    count: "{{count}}"
+    internalAddress: "{{internalAddress.stdout_lines[0]}}" 
+    externalAddress: "{{externalAddress}}" 
+    port: "{{port}}" 
+    executable: "{{executable}}" 
+  with_items:
+    - "{{destinations}}"
+  register: test_result
+  ignore_errors: yes
+
+- name: Delete the executable 
+  file: path=/tmp/http_ping state=absent
+  run_once: yes

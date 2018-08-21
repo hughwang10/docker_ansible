@@ -1,0 +1,16 @@
+{% extends "base.html.jinja" %}
+
+{% block title %}MIIT-NV Report{% endblock %}
+{% block date %}{{report_date}}{% endblock %}
+
+{% block summary %} 
+{% include 'summary.html.jinja' %}
+{% endblock %}
+
+{% block detail %}
+{% include 'detail.html.jinja' %}
+{% endblock %}
+
+{% block network %}
+{% include 'network.html.jinja' %}
+{% endblock %}

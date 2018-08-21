@@ -1,0 +1,50 @@
+#hosts_names_vars_file: "{{ rel_base_path | default('../..') }}/system-config/inventory/hosts_vmnames.yml"
+#vm_base_names: "{{ hosts_vmnames }}"
+
+#MSP VMs Flavors
+#os_ts_cpu: "{{ resource_cpu_ts | default(resource_cpu_ts_i | default('4')) }}"
+#os_ts_mem: "{{ resource_mem_ts | default(resource_mem_ts_i | default('8192')) }}"
+#os_ts_vol_root_size: "{{ ts_rootdisk_size | default('50') }}"
+#os_ts_vol_uc_size: '20'
+
+#os_mn_cpu: "{{ resource_cpu_mn | default(resource_cpu_mn_i | default('2')) }}"
+#os_mn_mem: "{{ resource_mem_mn | default(resource_mem_mn_i | default('8192')) }}"
+#os_mn_vol_root_size: "{{ mn_rootdisk_size | default(default_rootdisk_size | default('20')) }}"
+#os_mn_vol_data_size: "{{ resource_disk_2 | default('20') }}"
+#os_mn_vol_arch_size: "{{ resource_disk_3 | default('20') }}"
+#os_mn_vol_backup_size: "{{ resource_disk_4 | default('50') }}"
+#os_mn_vol_misc_size: "{{ resource_disk_2 | default('20') }}"
+
+#os_slb_cpu: "{{ resource_cpu_slb | default(resource_cpu_slb_i | default('4')) }}"
+#os_slb_mem: "{{ resource_mem_slb | default(resource_mem_slb_i | default('8192')) }}"
+#os_slb_vol_root_size: "{{ slb_rootdisk_size | default(default_rootdisk_size | default('20')) }}"
+
+#os_da_cpu: "{{ resource_cpu_da | default(resource_cpu_da_i | default('2')) }}"
+#os_da_mem: "{{ resource_mem_da | default(resource_mem_da_i | default('8192')) }}"
+#os_da_vol_root_size: "{{ da_rootdisk_size | default(default_rootdisk_size | default('20')) }}"
+
+#os_vom_cpu: "{{ resource_cpu_vom | default(resource_cpu_vom_i | default('6')) }}"
+#os_vom_mem: "{{ resource_mem_vom | default(resource_mem_vom_i | default('6144')) }}"
+#os_vom_vol_root_size: "{{ vom_rootdisk_size | default(default_rootdisk_size | default('20')) }}"
+
+#os_mon_cpu: "{{ resource_cpu_mon | default(resource_cpu_mon_i | default('4')) }}"
+#os_mon_mem: "{{ resource_mem_mon | default(resource_mem_mon_i | default('8192')) }}"
+#os_mon_vol_root_size: "{{ mon_rootdisk_size | default(default_rootdisk_size | default('20')) }}"
+
+#os_ddc_cpu: "{{ resource_cpu_ddc | default(resource_cpu_ddc_i | default('2')) }}"
+#os_ddc_mem: "{{ resource_mem_ddc | default(resource_mem_ddc_i | default('6144')) }}"
+#os_ddc_vol_root_size: "{{ ddc_rootdisk_size | default(default_rootdisk_size | default('20')) }}"
+
+#os_cim_cpu: "{{ resource_cpu_cim | default(resource_cpu_cim_i | default('2')) }}"
+#os_cim_mem: "{{ resource_mem_cim | default(resource_mem_cim_i | default('8192')) }}"
+#os_cim_vol_root_size: "{{ cim_rootdisk_size | default(default_rootdisk_size | default('20')) }}"
+
+#os_custom_cpu: "{{ resource_cpu_custom | default(resource_cpu_custom_i | default('2')) }}"
+#os_custom_mem: "{{ resource_mem_custom | default(resource_mem_custom_i | default('8192')) }}"
+#os_custom_vol_root_size: "{{ custom_rootdisk_size | default(default_rootdisk_size | default('20')) }}"
+
+#os_tools_cpu: "{{ resource_cpu_tools | default(resource_cpu_tools_i | default('2')) }}"
+#os_tools_mem: "{{ resource_mem_tools | default(resource_mem_tools_i | default('4096')) }}"
+#os_tools_vol_root_size: "{{ tools_rootdisk_size | default('50') }}"
+
+

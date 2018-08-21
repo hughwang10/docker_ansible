@@ -1,0 +1,622 @@
+---
+{% raw %}
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# \brief   Generate playbook file
+# \version 0.3.43
+# \date    2016-05-18
+
+- hosts: deploy_server
+#  accelerate: true
+  user: "{{ userid }}"
+  gather_facts: no
+
+  vars_files:
+    - "{{ msp_vars_file }}"
+    - "{{ misc_vars_file }}"
+    - - "{{ networks_ipv6_vars_file }}"
+      - "{{ networks_vars_file }}"
+    - "{{ networks_vars_file }}"
+    - "{{ user_passwords_vars_file }}"
+    - - "{{ routing_ipv6_vars_file }}"
+      - "{{ routing_vars_file }}"
+    - "{{ routing_vars_file }}"
+    - "{{ vr_control_vars_file }}"
+    - "{{ tor_switch_vars_file }}"
+    - "{{ ssh_keys_vars_file }}"
+    - "{{ vm_img_vars_file }}"
+    - "{{ vm_resource_vars_file }}"
+    - "{{ os_tuning_vars_file }}"
+    - - "{{ hosts_names_vars_file }}"
+      - "{{ default_hosts_names_vars_file }}"
+    - "{{ clusters_vars_file }}"
+    - "{{ hosts_vars_file }}"    
+    - "{{ site_vars_file }}"
+    - "{{ site_vars_files_file }}"
+    
+  vars:
+    #
+    # Global System Configuration
+    # 
+    userid: root
+    # default action, config, could also be deploy_vbox
+    action: config
+    # To make sure the new vms are not booted when created
+{% endraw %}
+    site_dir: "{{ site_dir }}"
+    vars_dir: "{{ vars_dir }}"
+    msp_vars_file: "./{{ vars_dir }}/msp.yml"
+    misc_vars_file: "./{{ vars_dir }}/misc.yml"
+    networks_vars_file: "./{{ vars_dir }}/networks.yml"
+    networks_ipv6_vars_file: "./{{ vars_dir }}/networks_ipv6.yml"
+    user_passwords_vars_file: "./{{ vars_dir }}/user_passwords.yml"
+    routing_vars_file: "./{{ vars_dir }}/routing.yml"
+    routing_ipv6_vars_file: "./{{ vars_dir }}/routing_ipv6.yml"
+#    ip_addresses_vars_file: "./{{ vars_dir }}/ip_addresses.yml"
+    vr_control_vars_file: "./{{ vars_dir }}/vr_control.yml"
+    tor_switch_vars_file: "./{{ vars_dir }}/switch_vars.yml"
+    ssh_keys_vars_file: "./{{ vars_dir }}/ssh_keys.yml"
+    vm_img_vars_file: "./{{ vars_dir }}/vm_img_vars.yml"
+    vm_resource_vars_file: "./{{ vars_dir }}/vm_resource_vars.yml"
+    os_tuning_vars_file: "./{{ vars_dir }}/os_tuning.yml"
+    vbox_vars_file: "./{{ vars_dir }}/vbox_vars.yml"
+    vsphere_vars_file: "./{{ vars_dir }}/vsphere_vars.yml"
+    baremetal_vars_file: "./{{ vars_dir }}/baremetal_vars.yml"
+    openstack_vars_file: "./{{ vars_dir }}/openstack_vars.yml"
+    pxe_vars_file: "./{{ vars_dir }}/pxe_vars.yml"
+    base_path: "/root"
+    ssh_public_key_file: "~/.ssh/id_rsa.pub"
+    ssh_private_key_file: "~/.ssh/id_rsa"
+{% raw %}
+    resource_mem_ts_baremetal: 64000
+    base_path2: "{{ base_path }}"
+    outputdir: ""
+    output_folder: "{{ base_path }}/system-config"
+    output_folder_prev: "{{ base_path2 }}/system-config"
+    img_folder: "{{ base_path }}/system-images"
+    site_vars_files_file: "./{{ site_dir }}/{{ site_name }}_vars_files.yml"
+{% endraw %}
+    create_vars_file: "./{{ vars_dir }}/create_vars.yml"
+    site_name: "{{ site_name }}"
+    site_vars_file: "./{{ site_dir }}/{{ site_name }}.yml"
+    clusters_vars_file: "./{{ vars_dir }}/clusters_vars.yml"
+    hosts_vars_file: "./{{ vars_dir }}/hosts_vars.yml"
+    default_hosts_names_vars_file: "./{{ vars_dir }}/default_hosts_names.yml"
+
+{#     msa_ipaddr: "{{ (internal_network | ipaddr('int') + (internal_start_ip_i | int)) | ipaddr('address') }}" #}
+{#     mn_oam_ip: "{{ (oam_network | ipaddr('int') + (oam_start_ip_i | int)) | ipaddr('address') }}" #}
+    msp_linux_distro: {% if (msp_major_version | default('2') | int) == 2 %}SLES_12{% else %}SLES_11_SP3{% endif %}
+
+{% for node_type in vms %}
+{% if node_type.vm_type == "mn" %}
+    msa_ipaddr: "{{ (internal_network | ipaddr('int') + (internal_start_ip_i | int) + (node_type.ip_start_offset | int))  | ipaddr('address') }}"
+    mn_oam_ip:  "{{ (oam_network | ipaddr('int') + (oam_start_ip_i | int) + (node_type.ip_start_offset | int)) | ipaddr('address') }}"
+{% endif %}
+{% endfor %}
+
+
+{% for node_type in vms %}
+{% if node_type.vm_type == "mon" %}
+    mon_internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset))) | int) | ipaddr('address') }}"
+{% endif %}
+{% endfor %}
+
+{% if deploy_platform == "deploy_openstack" %}
+    cee_deploy_prefix: "cee"
+{% endif %}
+{% raw %}
+    mn_internal_ip: "{{ msa_ipaddr }}"
+    msa_ip: "{{ msa_ipaddr }}"
+    hosts_names_vars_file: "{{ rel_base_path | default('../..') }}/system-config/inventory/hosts_names.yml"
+    deploy_platform: "deploy_vbox"
+    system_vars_file: "./{{ vars_dir }}/system_vars.yml"
+
+  pre_tasks:
+
+    - debug: var="{{ deploy_platform }}"
+
+    - include_vars: "{{ vbox_vars_file }}"
+      when: deploy_platform == "deploy_pxe"
+
+    - include_vars: "{{ pxe_vars_file }}"
+      when: deploy_platform == "deploy_pxe"
+
+    - include_vars: "{{ pxe_vars_file }}"
+      when: deploy_platform == "deploy_moonshot"
+
+    - include_vars: "{{ vbox_vars_file }}"
+      when: deploy_platform == "deploy_vbox"
+
+    - include_vars: "{{ baremetal_vars_file }}"
+      when: deploy_platform == "deploy_baremetal"
+
+    - include_vars: "{{ openstack_vars_file }}"
+      when: deploy_platform == "deploy_openstack"
+
+    - include_vars: "{{ create_vars_file }}"
+      when: deploy_platform == "deploy_openstack"
+
+    - include_vars: "{{ vsphere_vars_file }}"
+      when: deploy_platform == "deploy_vsphere"
+
+    - include_vars: "{{ system_vars_file }}"
+
+#    - name: "Set localhost to msp web server for CEE deployment" 
+    - set_fact: 
+        vm_type_resources: "{{ vm_type_resources_msp }}"
+
+    - name: "Create output directory and normalize the path to the system to config/deploy"
+      local_action: file path={{ output_folder }} state=directory
+      local_action: shell readlink -m {{ output_folder }}
+      register: output_folder1
+      run_once: true
+
+    - name: "Normalize the path of output folder to system to upgrade"
+      local_action: shell readlink -m {{ output_folder_prev }}
+      register: output_folder_current_system
+      when: output_folder_prev is defined
+
+    - name: "Determine IP address of deploy host" 
+      action: shell /sbin/ifconfig "{{ msp_tools_webserver_if | default('eth0') }}"  | grep 'inet addr:' | cut '-d:' -f2 | cut '-d ' -f1 
+      register: tools_vm_ip1
+#      when: deploy_platform != "deploy_openstack"
+
+    - name: "Determine IP address of deploy host (TOOLS VM) for CEE" 
+      local_action: shell /sbin/ifconfig "{{ msp_tools_webserver_if | default('eth0') }}"  | grep 'inet addr:' | cut '-d:' -f2 | cut '-d ' -f1 
+      register: tools_vm_ip2
+      when: deploy_platform == "deploy_openstack"
+
+    - set_fact: msp_tools_vm_ip="{{ tools_vm_ip2.stdout | default(tools_vm_ip1.stdout) | regex_replace('^([0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}).*$', '\\1') }}"
+
+    - name: "Set localhost to msp web server for CEE deployment" 
+      set_fact: miit_web_server_ip="{{ msp_tools_vm_ip }}"
+      when: deploy_platform == "deploy_openstack"
+
+    - debug: msg="MSP TOOLS VM IP_ {{ miit_web_server_ip }}"
+      when: deploy_platform == "deploy_openstack"
+
+    - set_fact: tcpproxymem="{{ ((resource_mem_ts | default(resource_mem_ts_i) | int) * 1024 * tcpproxy_percentmem | default(60) | int / 100) | int }}"
+      when: deploy_platform != "deploy_baremetal"
+
+    - set_fact: tcpproxymem="{{ ((resource_mem_ts | default(resource_mem_ts_baremetal) | int) * 1024 * tcpproxy_percentmem | default(60) | int / 100) | int }}"
+      when: deploy_platform == "deploy_baremetal"
+
+    - local_action: stat path={{ (output_folder + "/../custom-repos/system-repo") | realpath }}
+      register: repoX
+
+    - local_action: stat path={{ (output_folder + "/../../custom-repos/system-repo") | realpath }}
+      register: repoX2
+#      when: repoX.stat.exists | bool == False
+
+    - local_action: set_fact system_repo="system-repo"
+      when: (repoX.stat.exists | bool == True) or (repoX2.stat.exists | bool == True)
+
+    - name: ""
+      local_action: shell [ 'find {{ (output_folder + "/../custom-repos/system-repo") | realpath }} -maxdepth 1 -type f -name "*.rp*"' != '' ] && find {{ (output_folder + "/../custom-repos/system-repo") | realpath }} -maxdepth 1 -type f -name "*.rp*" | xargs -l basename | sed 's|\(^.*\)\(\..*\)$|\1|g'
+#| cut -d'.' -f1
+      register: system_rpms 
+      ignore_errors: yes
+      when: repoX.stat.exists | bool == True
+
+    - name: ""
+      local_action: shell [ 'find {{ (output_folder + "/../../custom-repos/system-repo") | realpath }} -maxdepth 1 -type f -name "*.rp*"' != '' ] && find {{ (output_folder + "/../../custom-repos/system-repo") | realpath }} -maxdepth 1 -type f -name "*.rp*" | xargs -l basename | sed 's|\(^.*\)\(\..*\)$|\1|g'
+      register: system_rpms 
+      ignore_errors: yes
+      when: repoX2.stat.exists | bool == True
+
+    - name: ""
+      set_fact: vm_boot=False
+      when: system_versiontag_old is defined and system_versiontag_old != system_versiontag
+
+    - name: ""
+      set_fact: vm_upgrade=False
+
+    - name: ""
+      set_fact: vm_upgrade=True
+      when: system_versiontag_old is defined and system_versiontag_old != system_versiontag
+
+    - name: ""
+      set_fact: running_hagroup="all_groups"
+      when: running_hagroup is not defined
+
+    - name: "Backup MSA if an upgrade"
+      nbapi: 
+        user: "{{ msa_user | default('admin') }}"
+        password: "{{ msa_passwd }}"
+        host: "{{ mn_oam_ip }}"
+        operation: "GET"
+        command: "bulk/configurationprovisioning"
+        data_file: "{{ site_name + system_backup_filename_suffix | default('_msa_backup') + system_versiontag_old }}.json"
+      ignore_errors: yes
+      when: vm_upgrade == True
+
+    - name: "Backup MSA shared files if an upgrade"
+      nbapi: 
+        user: "{{ msa_user | default('admin') }}"
+        password: "{{ msa_passwd }}"
+        host: "{{ mn_oam_ip }}"
+        operation: "GET"
+        command: "bulk/sharedfiles"
+        data_file: "{{ site_name + system_backup_filename_suffix | default('_msa_backup') + system_versiontag_old }}.zip"
+      ignore_errors: yes
+      when: vm_upgrade == True
+{% endraw %}
+{% if deploy_platform == "deploy_vsphere" %}
+{% raw %}
+    - name: "Get esxi hosts and resource pools from connected vSphere" 
+      action:  
+        module: vsphere_list_hosts
+        vcenter: "{{ vsphere_vcenter }}"
+        vcusername: "{{ vsphere_vcusername }}"
+        vcpassword: "{{ vsphere_vcpassword }}"
+        datacenter: "{{ vsphere_datacenter }}"
+      register: vsphere_live_hosts
+      when: action == "deploy_vsphere"
+{% endraw %}
+{% endif %}
+
+{% if deploy_platform == "deploy_moonshot" %}
+{% raw %}
+    - name: "Detect all the Moonshot Cartridges in the chassis"
+      moonshot_cmd:
+        username: "{{ilo_username}}"
+        password: "{{ilo_password}}"
+        address: "{{ilo_address}}"
+        cartridge_exclusion: "{{ pxe_exclude_cartridges }}"
+        action: get_nodes
+      register: result
+
+    - name: "Set list of Moonshot Cartridges to a fact"
+      set_fact:
+        nodes: "{{result.cmd_output}}"
+{% endraw %}
+{% endif %}
+{% if deploy_std_vm is defined %}
+    - action: stat path="{{ ssh_public_key_file | default('') }}"
+      register: pub_file
+{% raw %}
+    - name: ""
+#      local_action: 
+      set_fact: 
+          ssh_public_key: "{{ lookup('file', ssh_public_key_file ) }}"
+          ssh_private_key: "{{ lookup('file', ssh_private_key_file ) }}"
+          gerrit_mirror_internal: "{{ gerrit_mirror | default('gerritmirror-ha.rnd.ki.sw.ericsson.se:29418') }}"
+          gerrit_host_internal: "{{ gerrit_host | default('gerrit.ericsson.se:29418') }}"
+#      when: pub_file.stat.exist is defined
+{% endraw %}
+{% endif %}
+
+  roles:
+{% if deploy_platform == "deploy_moonshot" or deploy_platform == "deploy_pxe" %}
+     # Extracts the PXE image and copies the content correct locations on the PXE server
+{% for node_type in vms %}
+{% if node_type.vm_end_number != '0'  %}
+     - { role: "setup_image_pxe", node_type: '{{ node_type.vm_type }}' }
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if deploy_platform == "deploy_moonshot" %}
+     # List the nodes, prepare the DHCP configuration and start DHCP and TFTP services on the PXE Server
+     - { role: "prepare_config_pxe" }
+{% endif %}
+
+{% if deploy_platform == "deploy_vbox" %}
+     # Create all vbox networks
+     - { role: "network_create_vbox", when: action == "deploy_vbox" and  manage_networks | default("True") == "True" }
+{% endif %}
+{% if deploy_platform == "deploy_pxe" %}
+     # Create all vbox networks for a vbox pxe deployment
+     - { role: "network_create_vbox", when: action == "deploy_pxe" and  manage_networks | default("True") == "True" }
+{% endif %}
+{% if custom_repos is defined or system_repo is defined %}
+{% raw %}
+     #
+     # Create custom repos
+     # 
+     - { role: prepare_custom_repos,  when: custom_repos is defined or system_repo is defined }
+{% endraw %}
+{% endif %}
+{% if custom_files is defined %}
+     #
+     # Create custom files
+     #
+     - { role: prepare_custom_files, when: custom_files is defined }
+{% endif %}
+{% if deploy_platform == "deploy_vsphere" %}
+     #
+     # Create all templates in vmware, find out which templates to generate
+     #
+{% if force_templates | default("False") == "False" %}
+     - { role: "vm_deploy_vsphere_prepare_all", {% for type in all_vm_types | default([]) %}
+{{ type + "_template_gen: " }}{% if  ('%s'|format(vms|byattr('vm_type', type) | map(attribute='vm_end_number') | list | join('')) | int) > 0 %}True, {% else %}False, {% endif %}{% endfor %}when: action == "deploy_vsphere" and  manage_templates | default("True") == "True" }
+     - { role: "vm_deploy_vsphere_prepare_all", {% for type in all_vm_types | default([]) %}
+{{ type + "_template_gen: " }}{% if  ('%s'|format(vms|byattr('vm_type', type) | map(attribute='vm_end_number') | list | join('')) | int) > 0 %}True, {% else %}False, {% endif %}{% endfor %}when: action == "config" and  manage_templates | default("True") == "True" }
+{% else %}
+     - { role: "vm_deploy_vsphere_prepare_all", mn_template_gen: {{ create_mn_template | default('True')  | bool }}, dk_template_gen: {{ create_dk_template | default('True')  | bool }}, ts_template_gen: {{ create_ts_template | default('True')  | bool }}, mon_template_gen: {{ create_mon_template | default('True') | bool }}, slb_template_gen: {{ create_slb_template | default('True') | bool }}, ddc_template_gen: {{ create_ddc_template | default('True')  | bool }}, vom_template_gen: {{ create_vom_template | default('True') }}, da_template_gen: {{ create_da_template | default('True')  | bool }}, cim_template_gen: {{ create_cim_template | default('False')  | bool }}, tools_template_gen: {{ create_tools_template | default('False')  | bool }}, custom_template_gen: {{ create_custom_template | default('False')  | bool }}, when: action == "deploy_vsphere" and  manage_templates | default("True") == "True" }
+     - { role: "vm_deploy_vsphere_prepare_all", mn_template_gen: {{ create_mn_template | default('True')  | bool }}, dk_template_gen: {{ create_dk_template | default('True')  | bool }}, ts_template_gen: {{ create_ts_template | default('True')  | bool }}, mon_template_gen: {{ create_mon_template | default('True') | bool }}, slb_template_gen: {{ create_slb_template | default('True') | bool }}, ddc_template_gen: {{ create_ddc_template | default('True')  | bool }}, vom_template_gen: {{ create_vom_template | default('True') }}, da_template_gen: {{ create_da_template | default('True')  | bool }}, cim_template_gen: {{ create_cim_template | default('False')  | bool }}, tools_template_gen: {{ create_tools_template | default('False')  | bool }}, custom_template_gen: {{ create_custom_template | default('False')  | bool }}, when: action == "config" and  manage_templates | default("True") == "True" }
+{% endif %}
+{% endif %}
+{% if deploy_platform == "deploy_openstack" %}
+     #
+     #CEE : Find all image files and upload to Glance 
+     #
+{% if force_templates | default("False") == "False" %}
+     - { role: "vm_deploy_openstack_prepare_all", {% for type in all_vm_types | default([]) %}
+{{ type + "_template_gen: " }}{% if  ('%s'|format(vms|byattr('vm_type', type) | map(attribute='vm_end_number') | list | join('')) | int) > 0 %}True, {% else %}False, {% endif %}{% endfor %}when: action == "deploy_openstack" }
+{% else %}
+     - { role: "vm_deploy_openstack_prepare_all", mn_template_gen: {{ create_mn_template | default('True')  | bool }}, dk_template_gen: {{ create_dk_template | default('True')  | bool }}, ts_template_gen: {{ create_ts_template | default('True')  | bool }}, mon_template_gen: {{ create_mon_template | default('True') | bool }}, slb_template_gen: {{ create_slb_template | default('True') | bool }}, ddc_template_gen: {{ create_ddc_template | default('True')  | bool }}, vom_template_gen: {{ create_vom_template | default('True') }}, da_template_gen: {{ create_da_template | default('True') | bool }}, cim_template_gen: {{ create_cim_template | default('False')  | bool }}, tools_template_gen: {{ create_tools_template | default('False')  | bool }}, custom_template_gen: {{ create_custom_template | default('False')  | bool }}, when: action == "deploy_openstack" }
+{% endif %}
+     #
+     # Create MSP Common Stack
+     #
+     - { role: "vm2_create_msp_common_stack", when: action ==  "deploy_openstack" }
+{% endif %}
+     # 
+     #
+{% macro vm_rolesm(node_type, vm_instance, clusterid, vmi ) %}
+{% if node_type.vm_type == "mn" %}
+     #
+     # MN migrate from old to new, update template with disks from old MN
+     #
+{% if deploy_platform == "deploy_vbox" %}
+     - { role: vm2_upgrade_vbox, vm_type: "mn", vm_name: "{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}", output_folder_old: "{{ '{{' }} output_folder_current_system.stdout {{ '}}' }}", when: (system_versiontag_old is defined) and (system_versiontag_old != system_versiontag) and action == "deploy_vbox" }
+{% endif %}
+{% if deploy_platform == "deploy_vsphere" %}
+     - { role: vm2_upgrade_vsphere, vm_type: "mn", vm_name: "{{ clusterid }}-{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}", output_folder_old: "{{ '{{' }} output_folder_current_system.stdout {{ '}}' }}", when: (system_versiontag_old is defined) and (system_versiontag_old != system_versiontag) and action == "deploy_vsphere" }
+{% endif %}
+{% if deploy_platform == "deploy_openstack" %}
+     - { role: vm2_upgrade_openstack, vm_type: "mn", vm_name: "{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}", output_folder_old: "{{ '{{' }} output_folder_current_system.stdout {{ '}}' }}", when: (system_versiontag_old is defined) and (system_versiontag_old != system_versiontag) and action == "deploy_openstack" }
+{% endif %}
+     #
+     #
+     # Management node configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}", vm_name: "{{ clusterid }}-{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}",{% raw %}oam_ip: "{{ mn_oam_ip }}", internal_ip: "{{ msa_ip }}"{% endraw %}, mn_config_type: "firstinstall",{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %}{% raw %} out_folder: "{{ output_folder }}", output_folder: "{{ output_folder1.stdout }}", when: (system_versiontag_old is not defined) }
+{% endraw %}
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}", vm_name: "{{ clusterid }}-{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", {% raw %}oam_ip: "{{ mn_oam_ip }}", internal_ip: "{{ msa_ip }}", mn_config_type: "upgrade", {% endraw %}{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %}{% raw %}out_folder: "{{ output_folder }}", output_folder: "{{ output_folder1.stdout }}", when: (system_versiontag_old is defined) and (system_versiontag_old != system_versiontag) }{% endraw %}
+{% endif %}
+{% if node_type.vm_type == "mon" %}
+     #
+     # MON migrate from old to new, update template with disks from old MON
+     #
+{% if deploy_platform == "deploy_openstack" %}
+     - { role: vm2_upgrade_openstack, vm_type: "mon", vm_name: "{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}", output_folder_old: "{{ '{{' }} output_folder_current_system.stdout {{ '}}' }}", when: (system_versiontag_old is defined) and (system_versiontag_old != system_versiontag) and action == "deploy_openstack" }
+{% endif %}
+{% endif %} 
+{% endmacro %}
+{% macro vm_rolesother(node_type, vm_instance, clusterid, vmi, phase) %}
+{% if node_type.vm_type == "ts" %}
+     #
+     # TS configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ clusterid }}-{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", access_ip: "{{ (access_network | ipaddr('int') + (node_type.access_ip | default(access_start_ip_i | int + node_type.access_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internet_ip: "{{ (internet_network | ipaddr('int') + (node_type.internet_ip | default(internet_start_ip_i | int + node_type.internet_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% if node_type.internet_ip_start_offsets is defined or node_type.internet_ips is defined %}, internet_ipv4: [ {% if node_type.internet_ip_start_offsets is defined %}{% for ips in node_type.internet_ip_start_offsets %}"{{ (internet_network | ipaddr('int') + internet_start_ip_i | int + ips | int + (vmi | int) | int) | ipaddr('address') }}"{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}{% if node_type.internet_ips is defined %}{% for ips in node_type.internet_ips %}"{{ (internet_network | ipaddr('int') + ips | int + (vmi | int) | int) | ipaddr('address') }}"{% if not loop.last %}, {% endif %}{% endfor %}{% endif %} ]{% endif %}{% if node_type.internetphantom_ip_start_ips is defined %}, internetphantom_ipv4: [ {% for ips in node_type.internetphantom_ip_start_ips %}"{{ (internetphantom_network | ipaddr('int') + ips | int + (vmi | int) | int) | ipaddr('address') }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if controlplanesig_network_prefix is defined %}, controlplanesig_ip: "{{ (controlplanesig_network_prefix | ipaddr('int') + (node_type.controlplanesig_ip | default(controlplanesig_start_ip_i | int + node_type.controlplanesig_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% endif %}{% if node_type.internetingress_ipv6_start_offsets is defined %}, internetingress_ipv6: [ {% for ips in node_type.internetingress_ipv6_start_offsets %}"{{ '%d' | format( internetingress_start_ipv6_i | int + ips | int + vmi | int ) }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if node_type.access_ipv6_start_offsets is defined or node_type.access_ipv6_ips is defined %}, access_ipv6: [ {% for ips in (node_type.access_ipv6_ips | default( node_type.access_ipv6_start_offsets)) %}"{% if node_type.access_ipv6_start_offsets is defined %}{{ '%x' | format( access_start_ipv6_i | int + ips | int + vmi | int ) }}{% else %}{{ '%x' | format( ips | int + vmi | int ) }}{% endif %}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}, internetingress_ip: "{{ (internetingress_network | ipaddr('int') + (node_type.internetingress_ip | default(internetingress_start_ip_i | int + node_type.internetingress_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% if node_type.access_ipv6_start_offsets is defined or node_type.access_ipv6_ips is defined %}, access_ipv6: [ {% for ips in (node_type.access_ipv6_ips | default( node_type.access_ipv6_start_offsets)) %}"{% if node_type.access_ipv6_start_offsets is defined %}{{ '%x' | format( access_start_ipv6_i | int + ips | int + vmi | int ) }}{% else %}{{ '%x' | format( ips | int + vmi | int ) }}{% endif %}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if node_type.internet_ipv6_start_offsets is defined or node_type.internet_ipv6_ips is defined %}, internet_ipv6: [ {% for ips in (node_type.internet_ipv6_ips | default( node_type.internet_ipv6_start_offsets)) %}"{% if node_type.internet_ipv6_start_offsets is defined %}{{ '%x' | format( internet_start_ipv6_i | int + ips | int + vmi | int ) }}{% else %}{{ '%x' | format( ips | int + vmi | int ) }}{% endif %}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if controlplanesig_network_prefix is defined and controlplanesig_name is defined and node_type.controlplanesig_ipv6_start_offsets is defined %}, controlplanesig_ipv6: [ {% for ips in node_type.controlplanesig_ipv6_start_offsets %}"{{ '%x' | format( controlplanesig_start_ipv6_i | int + ips | int + vmi | int ) }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %},{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %}, deployment_phase: "{{ phase }}", resource_disk_2: {% raw %}"{{ resource_disk_uc | default( resource_disk_2) | default(10) }}"{% endraw %} }
+{% endif %}
+{% if node_type.vm_type == "slb" %}
+     #
+     # SLB configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ clusterid }}-{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", access_ip: "{{ (access_network | ipaddr('int') + (node_type.access_ip | default(access_start_ip_i | int + node_type.access_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internet_ip: "{{ (internet_network | ipaddr('int') + (node_type.internet_ip | default(internet_start_ip_i | int + node_type.internet_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", accessingress_ip: "{{ (accessingress_network_prefix | ipaddr('int') + (node_type.accessingress_ip | default(accessingress_start_ip_i | int + node_type.accessingress_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internetingress_ip: "{{ (internetingress_network | ipaddr('int') + (node_type.internetingress_ip | default(internetingress_start_ip_i | int + node_type.internetingress_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% if node_type.access_ipv6_start_offsets is defined or node_type.access_ipv6_ips is defined %}, access_ipv6: [ {% for ips in (node_type.access_ipv6_ips | default( node_type.access_ipv6_start_offsets)) %}"{% if node_type.access_ipv6_start_offsets is defined %}{{ '%x' | format( access_start_ipv6_i | int + ips | int + vmi | int ) }}{% else %}{{ '%x' | format( ips | int + vmi | int ) }}{% endif %}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if node_type.internet_ipv6_start_offsets is defined or node_type.internet_ipv6_ips is defined %}, internet_ipv6: [ {% for ips in (node_type.internet_ipv6_ips | default( node_type.internet_ipv6_start_offsets)) %}"{% if node_type.internet_ipv6_start_offsets is defined %}{{ '%x' | format( internet_start_ipv6_i | int + ips | int + vmi | int ) }}{% else %}{{ '%x' | format( ips | int + vmi | int ) }}{% endif %}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if node_type.accessingress_ipv6_start_offsets is defined %}, accessingress_ipv6: [ {% for ips in node_type.accessingress_ipv6_start_offsets %}"{{ '%x' | format( accessingress_start_ipv6_i | int + ips | int + vmi | int ) }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if node_type.internetingress_ipv6_start_offsets is defined %}, internetingress_ipv6: [ {% for ips in node_type.internetingress_ipv6_start_offsets %}"{{ '%x' | format( internetingress_start_ipv6_i | int + ips | int + vmi | int ) }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}, {% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %} }
+{% endif %}
+{% if node_type.vm_type == "dk" %}
+     #
+     # DK configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ clusterid }}-{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", access_ip: "{{ (access_network | ipaddr('int') + (node_type.access_ip | default(access_start_ip_i | int + node_type.access_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internet_ip: "{{ (internet_network | ipaddr('int') + (node_type.internet_ip | default(internet_start_ip_i | int + node_type.internet_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% if node_type.internet_ip_start_offsets is defined or node_type.internet_ips is defined %}, internet_ipv4: [ {% if node_type.internet_ip_start_offsets is defined %}{% for ips in node_type.internet_ip_start_offsets %}"{{ (internet_network | ipaddr('int') + internet_start_ip_i | int + ips | int + (vmi | int) | int) | ipaddr('address') }}"{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}{% if node_type.internet_ips is defined %}{% for ips in node_type.internet_ips %}"{{ (internet_network | ipaddr('int') + ips | int + (vmi | int) | int) | ipaddr('address') }}"{% if not loop.last %}, {% endif %}{% endfor %}{% endif %} ]{% endif %}{% if node_type.internetphantom_ip_start_ips is defined %}, internetphantom_ipv4: [ {% for ips in node_type.internetphantom_ip_start_ips %}"{{ (internetphantom_network | ipaddr('int') + ips | int + (vmi | int) | int) | ipaddr('address') }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if controlplanesig_network_prefix is defined %}, controlplanesig_ip: "{{ (controlplanesig_network_prefix | ipaddr('int') + (node_type.controlplanesig_ip | default(controlplanesig_start_ip_i | int + node_type.controlplanesig_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% endif %}{% if node_type.internetingress_ipv6_start_offsets is defined %}, internetingress_ipv6: [ {% for ips in node_type.internetingress_ipv6_start_offsets %}"{{ '%d' | format( internetingress_start_ipv6_i | int + ips | int + vmi | int ) }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if node_type.access_ipv6_start_offsets is defined or node_type.access_ipv6_ips is defined %}, access_ipv6: [ {% for ips in (node_type.access_ipv6_ips | default( node_type.access_ipv6_start_offsets)) %}"{% if node_type.access_ipv6_start_offsets is defined %}{{ '%x' | format( access_start_ipv6_i | int + ips | int + vmi | int ) }}{% else %}{{ '%x' | format( ips | int + vmi | int ) }}{% endif %}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}, internetingress_ip: "{{ (internetingress_network | ipaddr('int') + (node_type.internetingress_ip | default(internetingress_start_ip_i | int + node_type.internetingress_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% if node_type.access_ipv6_start_offsets is defined or node_type.access_ipv6_ips is defined %}, access_ipv6: [ {% for ips in (node_type.access_ipv6_ips | default( node_type.access_ipv6_start_offsets)) %}"{% if node_type.access_ipv6_start_offsets is defined %}{{ '%x' | format( access_start_ipv6_i | int + ips | int + vmi | int ) }}{% else %}{{ '%x' | format( ips | int + vmi | int ) }}{% endif %}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if node_type.internet_ipv6_start_offsets is defined or node_type.internet_ipv6_ips is defined %}, internet_ipv6: [ {% for ips in (node_type.internet_ipv6_ips | default( node_type.internet_ipv6_start_offsets)) %}"{% if node_type.internet_ipv6_start_offsets is defined %}{{ '%x' | format( internet_start_ipv6_i | int + ips | int + vmi | int ) }}{% else %}{{ '%x' | format( ips | int + vmi | int ) }}{% endif %}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% if controlplanesig_network_prefix is defined and controlplanesig_name is defined and node_type.controlplanesig_ipv6_start_offsets is defined %}, controlplanesig_ipv6: [ {% for ips in node_type.controlplanesig_ipv6_start_offsets %}"{{ '%x' | format( controlplanesig_start_ipv6_i | int + ips | int + vmi | int ) }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %},{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %}, deployment_phase: "{{ phase }}", resource_disk_2: {% raw %}"{{ resource_disk_uc | default( resource_disk_2) | default(10) }}"{% endraw %} }
+{% endif %}
+{% if node_type.vm_type == "ddc" %}
+     #
+     # DDC configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ clusterid }}-{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}",{% if custom1_network_prefix is not defined %} access_ip: "{{ (access_network | ipaddr('int') + (node_type.access_ip | default(access_start_ip_i | int + node_type.access_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% if node_type.access_ipv6_start_offsets is defined or node_type.access_ipv6_ips is defined %}, access_ipv6: [ {% for ips in (node_type.access_ipv6_ips | default( node_type.access_ipv6_start_offsets)) %}"{% if node_type.access_ipv6_start_offsets is defined %}{{ '%x' | format( access_start_ipv6_i | int + ips | int + vmi | int ) }}{% else %}{{ '%d' | format( ips | int + vmi | int ) }}{% endif %}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %}{% else %} custom1_network_ip: "{{ (custom1_network | ipaddr('int') + (node_type.custom1_network_ip | default(custom1_network_start_ip_i | int + node_type.custom1_network_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% endif %}{% if node_type.custom1_network_ipv6_start_offsets is defined %}, custom1_network_ipv6: [ {% for ips in node_type.custom1_network_ipv6_start_offsets %}"{{ '%d' | format( custom1_network_start_ipv6_i | int + ips | int + vmi | int ) }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %},{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0) + (vmi | int) }}", cabinet_id: "{{ (node_type.execution_host_index_start | int | default(0)  + (vmi | int)) | int % xhost_numbers | int }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}{{ (node_type.execution_host_index_start | int | default(0)  + (vmi | int + 1)) | int % xhost_numbers | int }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %} }
+{% endif %}
+{% if node_type.vm_type in [ "mon", "vom", "jeos", "custom" ] or (node_type.vm_type in [ "tools" ] and node_type.infra_ext_ip is not defined) %}
+     #
+     # Simple node (MON, VOM, JEOS, TOOLS, CUSTOM) configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ clusterid }}-{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}",{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %} }
+{% endif %}
+{% if node_type.vm_type in [ "tools" ] and node_type.infra_ext_ip is defined %}
+     #
+     # TOOLS configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", {% if os_infra_ext_network is defined %}infra_ext_ip: "{{ (os_infra_ext_network | ipaddr('int') + (node_type.infra_ext_ip | default(infra_ext_start_ip_i | int + node_type.infra_ext_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", use_heat_env_file: "True", bootproto_oam: "static",{% endif %}{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %}, when: (running_hagroup == "all_groups") or (running_hagroup == "{{ node_type.hagroup | default('') }}") }
+{% endif %}
+{% if node_type.vm_type == "da" %}
+     #
+     # DA configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", {% if controlplanesig_network_prefix is not defined %} access_ip: "{{ (access_network | ipaddr('int') + (node_type.access_ip | default(access_start_ip_i | int + node_type.access_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% else %}controlplanesig_ip: "{{ (controlplanesig_network | ipaddr('int') + (node_type.controlplanesig_ip | default(controlplanesig_start_ip_i | int + node_type.controlplanesig_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% endif %}{% if node_type.controlplanesig_ipv6_start_offsets is defined %}, controlplanesig_ipv6: [ {% for ips in node_type.controlplanesig_ipv6_start_offsets %}"{{ '%d' | format( controlplanesig_start_ipv6_i | int + ips | int + vmi | int ) }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %},{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %}, when: (running_hagroup == "all_groups") or (running_hagroup == "{{ node_type.hagroup | default('') }}") }
+{% endif %}
+{% if node_type.vm_type == "cim" %}
+     #
+     # CIM configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", access_ip: "{{ (access_network | ipaddr('int') + (node_type.access_ip | default(access_start_ip_i | int + node_type.access_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}" {% if controlplanesig_network_prefix is defined %}, controlplanesig_ip: "{{ (controlplanesig_network | ipaddr('int') + (node_type.controlplanesig_ip | default(controlplanesig_start_ip_i | int + node_type.controlplanesig_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}"{% endif %}{% if node_type.controlplanesig_ipv6_start_offsets is defined %}, controlplanesig_ipv6: [ {% for ips in node_type.controlplanesig_ipv6_start_offsets %}"{{ '%d' | format( controlplanesig_start_ipv6_i | int + ips | int + vmi | int ) }}"{% if not loop.last %}, {% endif %}{% endfor %} ]{% endif %},{% if node_type.has_key('execution_host_index_start') %} execution_host_index: "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %}, when: (running_hagroup == "all_groups") or (running_hagroup == "{{ node_type.hagroup | default('') }}") }
+{% endif %}
+{% if node_type.vm_type in [ "l4sf" ] %}
+     #
+     # L4SF configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", access_ip: "{{ (access_network | ipaddr('int') + (node_type.access_ip | default(access_start_ip_i | int + node_type.access_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internet_ip: "{{ (internet_network | ipaddr('int') + (node_type.internet_ip | default(internet_start_ip_i | int + node_type.internet_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}",{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %}, when: (running_hagroup == "all_groups") or (running_hagroup == "{{ node_type.hagroup | default('') }}") }
+{% endif %}
+{% if node_type.vm_type in [ "cf" ] %}
+     #
+     # CF configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", access_ip: "{{ (access_network | ipaddr('int') + (node_type.access_ip | default(access_start_ip_i | int + node_type.access_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internet_ip: "{{ (internet_network | ipaddr('int') + (node_type.internet_ip | default(internet_start_ip_i | int + node_type.internet_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}",{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %}, when: (running_hagroup == "all_groups") or (running_hagroup == "{{ node_type.hagroup | default('') }}") }
+{% endif %}
+{% if node_type.vm_type not in all_vm_types %}
+     #
+     # Standard node configuration
+     - { role: "vm2_{% raw %}{{ action }}{% endraw %}", vm_type: "{{ node_type.vm_type }}",  clusterid: "{{ clusterid }}",vm_name: "{{ node_type.vm_basename }}{% if create_numberformat is defined %}{{ create_numberformat | format(vm_instance) }}{% endif %}", oam_ip: "{{ (oam_network | ipaddr('int') + (node_type.oam_ip | default(oam_start_ip_i | int + node_type.oam_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", internal_ip: "{{ (internal_network | ipaddr('int') + (node_type.internal_ip | default(internal_start_ip_i | int + node_type.internal_ip_start_offset | default(node_type.ip_start_offset)) + (vmi | int)) | int) | ipaddr('address') }}", user_data_template_file: "user-data-std.ansible",{% if node_type.has_key('execution_host_index_start') %} execution_host_index:  "{{ node_type.execution_host_index_start | int | default(0)  + (vmi | int) }}", {% endif %}{% if node_type.has_key('hagroup') %} hagroup:  "{{ node_type.hagroup }}", {% endif %} output_folder: {% raw %}"{{ output_folder1.stdout }}"{% endraw %}, when: (running_hagroup == "all_groups") or (running_hagroup == "{{ node_type.hagroup | default('') }}") }
+{% endif %}
+{% endmacro %}
+
+{% if manage_vms | default('True') == 'True' %}
+{% for node_type in vms %}
+{% if node_type.vm_end_number is not defined %}
+{% for vm_instance in node_type.vm_numbers %}
+{% if node_type.vm_type not in all_vm_types %}
+     - { role: "vm_deploy_vsphere_prepare_all", vm_type: {{ node_type.vm_type }}, std_template_gen: True, when: action == "deploy_vsphere" and  manage_templates | default("True") == "True" }
+{% endif %}
+{{ vm_rolesm(node_type,vm_instance, node_type.clusterid | default(clusterid), loop.index0) }}
+{% endfor %}
+{% else %}
+{% for vm_instance in range(node_type.vm_numbers.0 | int, node_type.vm_numbers.0 | int + node_type.vm_end_number | int ) %}
+{% if node_type.vm_type not in all_vm_types %}     - { role: "vm_deploy_vsphere_prepare_all", vm_type: {{ node_type.vm_type }}, std_template_gen: True, when: action == "deploy_vsphere" and  manage_templates | default("True") == "True" }
+{% endif %}
+{{ vm_rolesm(node_type,vm_instance, node_type.clusterid | default(clusterid), loop.index0) }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% for deployment_phase in deployment_phases | default([ "all" ]) %}
+{% if deployment_phase in [ "two" ] and action == "deploy_baremetal" %}
+     - { role: one_time_delay, delay: "{{ baremetal_boot_delay | default("580") }}" }
+{% endif %}
+{% if deployment_phase in [ "one", "all" ] or action == "deploy_baremetal" %}
+{% for node_type in vms %}
+{% if node_type.vm_end_number is not defined %}
+{% for vm_instance in node_type.vm_numbers %}
+{{ vm_rolesother(node_type,vm_instance, node_type.clusterid | default(clusterid), loop.index0, deployment_phase) }}
+{% endfor %}
+{% else %}
+{% for vm_instance in range(node_type.vm_numbers.0 | int, node_type.vm_numbers.0 | int + node_type.vm_end_number | int ) %}
+{{ vm_rolesother(node_type,vm_instance, node_type.clusterid | default(clusterid), loop.index0, deployment_phase) }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if deploy_platform == "deploy_openstack" %}
+     # 
+     # Manage Nova aggregates 
+     #
+     - { role: "vm2_manage_aggregates", mn_config_type: {% if system_versiontag_old is defined %}"upgrade"{% else %}{{ mn_config_type | default("firstinstall") }}{% endif %}, when: action == "deploy_openstack" }
+
+     - { role: "vm2_execute_deploy_openstack", hagroup: {% raw %}"{{ running_hagroup }}", when: action  == "deploy_openstack" and running_hagroup is defined and install_type == "install"{% endraw %} }
+
+     - { role: "vm2_execute_upgrade_openstack", vm_base_names: {% raw %}"{{ hosts_vmnames }}", version_new: "{{ system_versiontag }}", version_old: "{{ system_versiontag_old }}", hagroup: "{{ running_hagroup }}", when: action  == "deploy_openstack" and running_hagroup is defined and install_type == "upgrade"{% endraw %} }
+
+     - { role: "vm2_execute_rollover_openstack", vm_base_names: {% raw %}"{{ hosts_vmnames }}", version_new: "{{ system_versiontag }}", version_old: "{{ system_versiontag_old }}", hagroup: "{{ running_hagroup }}", when: (action  == "deploy_openstack") and (running_hagroup is defined) and (install_type == "rollback"){% endraw %} }
+
+{% endif %}
+
+     # 
+     # Create configuration for network switches
+     #
+{% if network_switch_config_type is defined %}
+{% for node_type in switches | default([]) %}
+{% for node in node_type.sw_numbers | default([]) %}
+{% set node_loop = loop %}
+{% if node_type.sw_type == "tor" and node_type.pod_size | default('network_switch_config_type') == "small" %}
+     - { role: switch_config, switch_template: template-msp7_vmware_TOR_small, switch_name: "{{ pod_name }}_TOR", switch_id: {{ node }}, {% for vr in node_type.vrs %}accessexternal_ip: {{ (accessexternal_network | ipaddr('int') + (vr.accessexternal_ip_start_offset + (node_loop.index0 | int)) | int) | ipaddr('address') }},{% endfor %} {% for vr in node_type.vrs %}internetexternal_ip: {{ (internetexternal_network | ipaddr('int') + (vr.internetexternal_ip_start_offset + (node_loop.index0 | int)) | int) | ipaddr('address') }},{% endfor %} oamexternal_ip: {{ (oamexternal_network | ipaddr('int') + (node_type.oamexternal_ip_start_offset | int + (loop.index0 | int)) | int) | ipaddr('address') }}, oam_ip: {{ (oam_network | ipaddr('int') + (node_type.oam_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_ip: {{ (oaminfra_network | ipaddr('int') + (node_type.oaminfra_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_port:  {{ node_type.oaminfra_port }},oam_port:  {{ node_type.oam_port }}, output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}" }
+{% endif %}
+
+{% if node_type.sw_type == "tor" and node_type.pod_size | default('network_switch_config_type') == "nano" %}
+     - { role: switch_config, switch_template: template-msp7_vmware_TOR_nano, switch_name: "{{ pod_name }}_TOR", switch_id: {{ node }}, {% for vr in node_type.vrs %}accessexternal_ip: {{ (accessexternal_network | ipaddr('int') + (vr.accessexternal_ip_start_offset + (node_loop.index0 | int)) | int) | ipaddr('address') }},{% endfor %} {% for vr in node_type.vrs %}internetexternal_ip: {{ (internetexternal_network | ipaddr('int') + (vr.internetexternal_ip_start_offset + (node_loop.index0 | int)) | int) | ipaddr('address') }},{% endfor %} oamexternal_ip: {{ (oamexternal_network | ipaddr('int') + (node_type.oamexternal_ip_start_offset | int + (loop.index0 | int)) | int) | ipaddr('address') }}, oam_ip: {{ (oam_network | ipaddr('int') + (node_type.oam_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_ip: {{ (oaminfra_network | ipaddr('int') + (node_type.oaminfra_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_port:  {{ node_type.oaminfra_port }},oam_port:  {{ node_type.oam_port }}, output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}" }
+{% endif %}
+
+{% if node_type.sw_type == "tor" and node_type.pod_size | default('network_switch_config_type') == "medium" %}
+     - { role: switch_config, switch_template: template-msp7_vmware_TOR_medium, switch_name: "{{ pod_name }}_TOR", switch_id: {{ node }}, {% for vr in node_type.vrs %}accessexternal_ip: {{ (accessexternal_network | ipaddr('int') + (vr.accessexternal_ip_start_offset + (node_loop.index0 | int)) | int) | ipaddr('address') }},{% endfor %} {% for vr in node_type.vrs %}internetexternal_ip: {{ (internetexternal_network | ipaddr('int') + (vr.internetexternal_ip_start_offset + (node_loop.index0 | int)) | int) | ipaddr('address') }},{% endfor %} oamexternal_ip: {{ (oamexternal_network | ipaddr('int') + (node_type.oamexternal_ip_start_offset | int + (loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_ip: {{ (oaminfra_network | ipaddr('int') + (node_type.oaminfra_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_port:  {{ node_type.oaminfra_port }}, oam_ip: {{ (oam_network | ipaddr('int') + (node_type.oam_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oam_port:  {{ node_type.oam_port }}, output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}" }
+{% endif %}
+
+{% if node_type.sw_type == "tor" and node_type.pod_size | default('network_switch_config_type') == "large" %}
+     - { role: switch_config, switch_template: template-msp7_vmware_TOR_large, switch_name: "{{ pod_name }}_TOR", switch_id: {{ node }}, {% for vr in node_type.vrs %}accessexternal_ip: {{ (accessexternal_network | ipaddr('int') + (vr.accessexternal_ip_start_offset + (node_loop.index0 | int)) | int) | ipaddr('address') }},{% endfor %} {% for vr in node_type.vrs %}internetexternal_ip: {{ (internetexternal_network | ipaddr('int') + (vr.internetexternal_ip_start_offset + (node_loop.index0 | int)) | int) | ipaddr('address') }},{% endfor %} oamexternal_ip: {{ (oamexternal_network | ipaddr('int') + (node_type.oamexternal_ip_start_offset | int + (loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_ip: {{ (oaminfra_network | ipaddr('int') + (node_type.oaminfra_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_port:  {{ node_type.oaminfra_port }}, oam_ip: {{ (oam_network | ipaddr('int') + (node_type.oam_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oam_port: {{ node_type.oam_port }}, output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}" }
+{% endif %}
+
+{% if node_type.sw_type == "tor-san" and node_type.pod_size | default('network_switch_config_type') == "medium" %}
+     - { role: switch_config, switch_template: template-msp7_vmware_SAN_medium, switch_name: "{{ pod_name }}_SAN", switch_id: {{ node }}, oaminfra_ip: {{ (oaminfra_network | ipaddr('int') + (node_type.oaminfra_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_port:  {{ node_type.oaminfra_port }}, output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}" }
+{% endif %}
+
+{% if node_type.sw_type == "tor-san" and node_type.pod_size | default('network_switch_config_type') == "large" %}
+     - { role: switch_config, switch_template: template-msp7_vmware_SAN_large, switch_name: "{{ pod_name }}_SAN", switch_id: {{ node }}, oaminfra_ip: {{ (oaminfra_network | ipaddr('int') + (node_type.oaminfra_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oaminfra_port:  {{ node_type.oaminfra_port }}, output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}" }
+{% endif %}
+
+{% if node_type.sw_type == "control" and node_type.pod_size | default('network_switch_config_type') != "nano" %}
+     - { role: switch_config, switch_template: template-msp7_vmware_control, switch_name: "{{ pod_name }}_control", switch_id: {{ node }}, oaminfra_ip: {{ (oaminfra_network | ipaddr('int') + (node_type.oaminfra_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oam_port:  {{ node_type.oaminfra_port }}, output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}" }
+{% endif %}
+
+{% if node_type.sw_type == "control" and node_type.pod_size | default('network_switch_config_type') == "nano" %}
+     - { role: switch_config, switch_template: template-msp7_vmware_control_nano, switch_name: "{{ pod_name }}_control", switch_id: {{ node }}, oaminfra_ip: {{ (oaminfra_network | ipaddr('int') + (node_type.oaminfra_ip_start_offset | int + (node_loop.index0 | int)) | int) | ipaddr('address') }}, oam_port:  {{ node_type.oaminfra_port }}, output_folder: "{{ '{{' }} output_folder1.stdout {{ '}}' }}" }
+{% endif %}
+
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{% if action != "deploy_openstack" %}
+{% raw %}
+     #
+     # Generate System Inventory file to be used for network verification
+     #
+     - { role: inv_gen, output_folder: "{{ output_folder1.stdout }}" }
+
+{% endraw %}
+{% endif %}
+{% raw %}
+  post_tasks:
+     - name: "Create tar archive"
+       local_action: shell tar --directory=../../ -cvf {{ site_name + system_versiontag | default(product_versiontag) }}_config_files.tar msp_miit/site-config/{{ site_dir + '/' + site_name + '.yml' }} msp_miit/site-config/{{ site_dir + '/' + site_name + '_vars_files.yml' }}
+       ignore_errors: yes
+       when: archive_mode | default('tar') in [ 'encrypt', 'tar' ]
+
+     - name: "Update archive with vars files"
+       local_action: shell tar --directory=../../ -rvf {{ site_name + system_versiontag | default(product_versiontag) }}_config_files.tar msp_miit/site-config{{ item.file | regex_replace('^([\\\\\\\\|\\\\\"]+(\.)*)([^\\\\\"]+)([\\\\\\\\|\\\\\"]+)', '"\\3"') }}
+       with_items: (custom_override_vars_files | default([]) )
+       ignore_errors: yes
+       when: archive_mode | default('tar') in [ 'encrypt', 'tar' ]
+
+     - name: "Update archive with vars files"
+       local_action: shell tar --exclude='*.vmdk' --exclude='*.vdi' --exclude='*.qcow2' -rvf {{ site_name + system_versiontag | default(product_versiontag) }}_config_files.tar {{ rel_base_path + '/system-config' }}
+       ignore_errors: yes
+       when: archive_mode | default('tar') in [ 'encrypt', 'tar' ]
+
+{% endraw %}
+{% if action == "deploy_openstack" %}
+{% raw %}
+     - name: "Create archive with remote files"
+       shell: tar -C {{ output_folder_remote | default(output_folder) }} --exclude='*.qcow2' -cvf {{ output_folder_remote | default(output_folder) + '/../' + site_name + system_versiontag | default(product_versiontag) + '_remote_config_files.tar' }} {{ output_folder_remote | default(output_folder) }}
+       ignore_errors: yes
+       when: archive_mode | default('tar') in [ 'encrypt', 'tar' ]
+
+     - name: "Fetch archive with remote files"
+       fetch: src={{ output_folder_remote | default(output_folder) + '/../' + site_name + system_versiontag | default(product_versiontag) + '_remote_config_files.tar' }} dest=./ flat=yes
+       ignore_errors: yes
+       when: archive_mode | default('tar') in [ 'encrypt', 'tar' ]
+
+     - name: "Update archive with remote files archive"
+       local_action: shell tar --exclude='*.vmdk' --exclude='*.vdi' --exclude='*.qcow2' -rvf {{ site_name + system_versiontag | default(product_versiontag) }}_config_files.tar {{ './' + site_name + system_versiontag | default(product_versiontag) + '_remote_config_files.tar' }} && rm -f {{ site_name + system_versiontag | default(product_versiontag) + '_remote_config_files.tar' }}
+       ignore_errors: yes
+       when: archive_mode | default('tar') in [ 'encrypt', 'tar' ]
+
+     - name: ""
+       file: path={{ output_folder_remote | default(output_folder) + '/../' + site_name + system_versiontag | default(product_versiontag) + '_remote_config_files.tar' }} force=yes state=absent
+       ignore_errors: yes
+       when: archive_mode | default('tar') in [ 'encrypt', 'tar' ]
+{% endraw %}
+{% endif %}
+     - name: "Update archive with command log file"
+       local_action: shell tar --directory=../../ --exclude='*.vmdk' --exclude='*.vdi' --exclude='*.qcow2' -rvf {{ site_name + system_versiontag | default(product_versiontag) }}_config_files.tar msp_miit/site-config/{{ site_name + system_versiontag | default(product_versiontag) + '_cmd.log' }} 
+       ignore_errors: yes
+       when: archive_mode | default('tar') in [ 'encrypt', 'tar' ]
+
+     - name: "Encrypt config files tar archive"
+       local_action: shell gpg --batch --yes -o {{ site_name + system_versiontag | default(product_versiontag) }}_config_files.tar.gpg --symmetric  {{ site_name + system_versiontag | default(product_versiontag) }}_config_files.tar
+       ignore_errors: yes
+       when: archive_mode | default('tar') == 'encrypt'
+
+     - name: ""
+       local_action: command rm -f {{ site_name + system_versiontag | default(product_versiontag) + '_config_files.tar' }}
+       ignore_errors: yes
+       when: archive_mode | default('tar') == 'encrypt'
+
+     - name: "Encrypt config files tar archive"
+       local_action: command gzip -f {{ site_name + system_versiontag | default(product_versiontag) + '_config_files.tar' }}
+       ignore_errors: yes
+       when: archive_mode | default('tar') == 'tar'
+
+
+
+

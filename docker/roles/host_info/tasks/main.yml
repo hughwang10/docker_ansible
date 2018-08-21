@@ -1,0 +1,10 @@
+# Get the info from ansible facts and save the name of the hosts
+---
+- name: Get the routing info
+  routing:
+  sudo: yes
+
+- name: Record nicely the facts
+  set_fact:
+    test_result:
+      results: "{{host_info}}"

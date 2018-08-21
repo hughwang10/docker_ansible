@@ -1,0 +1,5 @@
+---
+# tasks file for prepare_folder
+
+- name: Creating the output folder
+  file: "path={{output_dir}} state=directory mode=755"

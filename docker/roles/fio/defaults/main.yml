@@ -1,0 +1,8 @@
+---
+# defaults file for fio
+json_result_ok: []
+json_result_ko: []
+json_result_a_ok: []
+json_result_a_ko: []
+reports: []
+reports_ko: []

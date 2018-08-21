@@ -11,6 +11,9 @@ RUN pip install -U 'requests[security]' netaddr pyVmomi pysphere cryptography
 RUN pip install ansible==1.9.6
 RUN mkdir -p /etc/ansible/
 RUN echo 'localhost ansible_connection=local' > /etc/ansible/hosts
+ADD ansible.cfg /etc/ansible/ansible.cfg
+ADD library /etc/ansible/library
+ADD roles /etc/ansible/roles
 
 # CMD ansible-playbook --version
 WORKDIR /project

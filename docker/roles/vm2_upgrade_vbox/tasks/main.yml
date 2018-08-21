@@ -1,0 +1,72 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm2_upgrade_vbox
+
+- name: "Vbox stop vm"
+#  action: command vboxmanage controlvm {{ vm_name_deploy_old }} acpipowerbutton
+  action: command vboxmanage controlvm {{ vm_name_deploy_old }} poweroff
+  ignore_errors: True
+
+- name: "check if db disk clone exists"
+  action: shell vboxmanage list hdds
+#| grep {{ output_folder_remote }}/vm/{{ vm_name_deploy }}-db.vdi
+  register: result
+
+- name: "remove db disk clone if exists"
+  action: command vboxmanage closemedium disk {{ output_folder_remote }}/vm/{{ vm_name_deploy }}-db.vdi --delete
+  when: result.stdout_lines | join('; ') | search("{{ output_folder_remote }}/vm/{{ vm_name_deploy }}-db.vdi")
+ 
+- name: "Vbox clone db disk"
+  action: command vboxmanage clonehd {{ output_folder_remote_old }}/vm/{{ vm_name_deploy_old }}-db.vdi {{ output_folder_remote }}/vm/{{ vm_name_deploy }}-db.vdi
+
+- name: "check if arch disk clone exists"
+  action: shell vboxmanage list hdds 
+#| grep {{ output_folder_remote }}/vm/{{ vm_name_deploy }}-arch.vdi
+  register: result
+
+- name: "remove arch disk clone if exists"
+  action: command vboxmanage closemedium disk {{ output_folder_remote }}/vm/{{ vm_name_deploy }}-arch.vdi --delete
+  when: result.stdout_lines | join('; ') | search("{{ output_folder_remote }}/vm/{{ vm_name_deploy }}-arch.vdi")
+
+- name: "Vbox clone arch disk"
+  action: command vboxmanage clonehd {{ output_folder_remote_old }}/vm/{{ vm_name_deploy_old }}-arch.vdi {{ output_folder }}/vm/{{ vm_name_deploy }}-arch.vdi
+
+- name: "check if backup disk clone exists"
+  action: shell vboxmanage list hdds 
+#| grep {{ output_folder_remote }}/vm/{{ vm_name_deploy }}-backup.vdi
+  register: result
+
+- name: "remove backup disk clone if exists"
+  action: command vboxmanage closemedium disk {{ output_folder_remote }}/vm/{{ vm_name_deploy }}-backup.vdi --delete
+  when: result.stdout_lines | join('; ') | search("{{ output_folder_remote }}/vm/{{ vm_name_deploy }}-backup.vdi")
+
+- name: "Vbox clone backup disk"
+  action: command vboxmanage clonehd {{ output_folder_remote_old }}/vm/{{ vm_name_deploy_old }}-backup.vdi {{ output_folder }}/vm/{{ vm_name_deploy }}-backup.vdi
+
+- name: "check if misc disk clone exists"
+  action: shell vboxmanage list hdds 
+#| grep {{ output_folder_remote }}/vm/{{ vm_name_deploy }}-misc.vdi
+  register: result
+
+- name: "remove misc disk clone if exists"
+  action: command vboxmanage closemedium disk {{ output_folder_remote }}/vm/{{ vm_name_deploy }}-misc.vdi --delete
+  when: result.stdout_lines | join('; ') | search("{{ output_folder_remote }}/vm/{{ vm_name_deploy }}-misc.vdi")
+ 
+- name: "Vbox clone misc disk"
+  action: command vboxmanage clonehd {{ output_folder_remote_old }}/vm/{{ vm_name_deploy_old }}-misc.vdi {{ output_folder }}/vm/{{ vm_name_deploy }}-misc.vdi
+
+- name: "Vbox start vm"
+  action: command vboxmanage startvm {{ vm_name_deploy_old }}
+
+

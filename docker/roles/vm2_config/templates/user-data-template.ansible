@@ -1,0 +1,76 @@
+{% block header %}
+# \hbrief   cloud-init main template for MSP config
+# \hversion 0.0.11
+# \hdate    2016-05-09{% endblock header %}
+
+{% block passwd %}chpasswd:
+ list: |
+  root:{{ root_passwd }}
+  miepadm:{{ miepadm_passwd }}
+{% endblock passwd %}
+
+{% if msp_linux_distro | match("SLES_12.*") %}
+{% block users %}users:
+{% if vm_ssh_auth_keys is defined %}
+ - name: miepadm
+   ssh-authorized-keys:
+{% for key in vm_ssh_auth_keys %}
+     - ssh-rsa {{ key }} 
+{% endfor %}
+{% endif %}
+{% endblock users %}
+{% endif %}
+
+{% block bootcmd %}bootcmd:
+{% endblock bootcmd %}
+
+{% block runcmd %}runcmd:{% endblock runcmd %}
+
+
+{% block runcmd_afg %}
+ - [ sh, -xc, "echo {{ internal_ip | default('127.0.0.1') }} $HOSTNAME >> /etc/hosts" ]
+{% if vm_type in [ "dk", "ts", "ddc", "slb" ] %}
+ - [ sh, -xc, "echo -n \"{{ oam_ip | default('127.0.0.1') }} \" >> /etc/hosts && echo -n $HOSTNAME.localdomain | cut -d . -f1 | tr '\n' '.' >> /etc/hosts && echo {{ domain_name | default ('localdomain') }} >> /etc/hosts" ]
+ - [ sh, -xc, "echo -n \"127.0.0.1 \" >> /etc/hosts && echo $HOSTNAME | cut -d . -f1 >> /etc/hosts" ]
+ - [ sh, -xc, "echo -n \"127.0.0.1 \" >> /etc/hosts && echo -n $HOSTNAME.{{ domain_name | default ('localdomain') }} | cut -d . -f1 | tr '\n' '.' >> /etc/hosts && echo {{ domain_name | default ('localdomain') }} >> /etc/hosts" ]
+{% endif %}
+{% endblock runcmd_afg %}
+
+
+{% if vm_type == "mn" %}
+{% block runcmd_startmn %}{% if msp_linux_distro | match("SLES_12.*") %} - [ sh, -xc, "echo -n \"{{ oam_ip | default('127.0.0.1') }} \" >> /etc/hosts && echo -n $HOSTNAME.localdomain | cut -d . -f1 | tr '\n' '.' >> /etc/hosts && echo {{ domain_name | default ('localdomain') }} >> /etc/hosts" ]
+{% endif %} - [ sh, -xc, "echo -n \"127.0.0.1 \" >> /etc/hosts && echo $HOSTNAME | cut -d . -f1 >> /etc/hosts" ]
+ - [ sh, -xc, "echo -n \"127.0.0.1 \" >> /etc/hosts && echo -n $HOSTNAME.{{ domain_name | default ('localdomain') }} | cut -d . -f1 | tr '\n' '.' >> /etc/hosts && echo {{ domain_name | default ('localdomain') }} >> /etc/hosts" ]
+{% if ((mn_config_version | default("v1")) == "v1") %} - [ sh, -xc, "/opt/miep/tools/mnsetup/initmn_new.sh {{ item.mn_config_type }} 2>&1 | tee /opt/miep/tools/mnsetup/{{ item.mn_config_type }}.log" ]
+{% endif %}{% if ((mn_config_version | default("")) == "v2") %}{% if msp_linux_distro | match('SLES_12.*') %} - [ sh, -xc, "umask 027 ; /opt/miep/tools/mnsetup/initmn.sh {{ item.mn_config_type }} 2>&1 | tee /opt/miep/tools/mnsetup/{{ item.mn_config_type }}.log" ]
+{% endif %}{% if msp_linux_distro | match('SLES_11.*') %} - [ sh, -xc, "/opt/miep/tools/mnsetup/initmn.sh {{ item.mn_config_type }} 2>&1 | tee /opt/miep/tools/mnsetup/{{ item.mn_config_type }}.log" ]
+{% endif %}
+{% if item.mn_config_type == "firstinstall" and msp_linux_distro | match('SLES_11.*') %} - [ sh, -xc, "source /etc/profile.local && service dbdisks start && service postgresql start && /opt/miep/msaapp/apps/clusteradmin/msa-clusteradmin.sh import /opt/miep/msaapp/apps/clusteradmin/clusters.json && service postgresql stop && service dbdisks stop" ]
+{% endif %}
+{% endif %}
+{% endblock runcmd_startmn %}
+{% block runcmd_custom_post %}{% endblock runcmd_custom_post %}
+{% endif %}
+
+
+
+{% if vm_type == "mon" %}
+{% block runcmd_startmon %}{% if msp_linux_distro | match("SLES_12.*") %} - [ sh, -xc, "echo -n \"{{ oam_ip | default('127.0.0.1') }} \" >> /etc/hosts && echo -n $HOSTNAME.localdomain | cut -d . -f1 | tr '\n' '.' >> /etc/hosts && echo {{ domain_name | default ('localdomain') }} >> /etc/hosts" ]
+{% endif %} - [ sh, -xc, "echo -n \"127.0.0.1 \" >> /etc/hosts && echo $HOSTNAME | cut -d . -f1 >> /etc/hosts" ]
+ - [ sh, -xc, "echo -n \"127.0.0.1 \" >> /etc/hosts && echo -n $HOSTNAME.{{ domain_name | default ('localdomain') }} | cut -d . -f1 | tr '\n' '.' >> /etc/hosts && echo {{ domain_name | default ('localdomain') }} >> /etc/hosts" ]
+{% endblock runcmd_startmon %}
+{% block runcmd_custom_post1 %}{% endblock runcmd_custom_post1 %}
+{% endif %}
+
+{% block timezone %}
+timezone: '{{ timezone }}'
+{% endblock timezone %}
+
+{% block write_files %}write_files:{% endblock write_files %}
+
+{% block scripts_per_once %}scripts_per_once:{% endblock scripts_per_once %}
+
+{% if vm_powerstate | default("reboot") == "reboot" %}
+{% block power_state %}
+{% endblock power_state %}
+{% endif %}

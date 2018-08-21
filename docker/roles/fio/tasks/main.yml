@@ -1,0 +1,92 @@
+# Performs and aggregate fio tests
+---
+
+  #Remove data from any previous test
+- name: delete the output directory
+  file: "path={{fio_output_dir}} state=absent"
+  when: (not (debug is defined and debug == true))
+
+- file: "path={{fio_output_dir}} state=directory"
+  name: Create the output directory
+
+  # Create the config file for each test
+- name: Create fio Job Description file
+  template: "src=test.fio.jinja dest={{fio_output_dir}}/{{item.name}}.fio"
+  with_items:
+  - "{{configs}}"
+
+  # In case we want to skip the actual test
+  # This checks if we already have all the data we need
+- name: Do we need ot perform the test
+  stat: "path={{fio_output_dir}}/{{item.name}}.json"
+  with_items:
+  - "{{configs}}"
+  register: p
+
+- set_fact:
+    must_run: "{{1 if p.results|map(attribute='stat')|rejectattr('exists', 'sameas', true)|list|length > 0 else 0}}"
+
+- name: Perform a disk test with fio
+  shell: "fio {{fio_output_dir}}/{{item.name}}.fio --output-format=json |tee {{fio_output_dir}}/{{item.name}}.json;exit ${PIPESTATUS[0]}"
+  with_items:
+  - "{{configs}}"
+  register: json_result
+  ignore_errors: yes
+  when: (not (dummy is defined and dummy == true)) or must_run == "1"
+
+- name: Separate success and failures
+  set_fact:
+    json_result_ok: "{{json_result.results|rejectattr('rc', 'sameas', 1)|list}}"
+    json_result_ko: "{{json_result.results|selectattr('rc', 'sameas', 1)|list}}"
+  when: (not (dummy is defined and dummy == true)) or must_run == "1"
+
+  # If we skipped the test we load the result from json files
+- name: Get the last results
+  command: "cat {{fio_output_dir}}/{{item.name}}.json"
+  with_items:
+  - "{{configs}}"
+  register: json_result_a
+  when: (dummy is defined and dummy == true) and must_run == "0"
+
+- name: Keepk only the successful ones
+  set_fact:
+    json_result_a_ok: "{{json_result_a.results|rejectattr('rc', 'sameas', 1)|list}}"
+    json_result_a_ko: "{{json_result_a.results|selectattr('rc', 'sameas', 1)|list}}"
+  when: (dummy is defined and dummy == true) and must_run == "0"
+
+  # We get the data either from the last result or the fio run
+- name: Record the results
+  set_fact:
+     reports: "{{(json_result_ok if ((not (dummy is defined and dummy == true)) or must_run == '1') else json_result_a_ok)|map(attribute='stdout')|map('from_json')|list}}"
+     reports_ko: "{{(json_result_ko if ((not (dummy is defined and dummy == true)) or must_run == '1') else json_result_a_ko)|list}}"
+
+  # We generate graph with the modified fio2gnuplot script
+- name: Generate the output
+  script: fio2gnuplot2.py -I {{fio_output_dir}} -gb -d {{fio_output_dir}} -o graph
+  register: test
+  when: reports|length > 0
+
+  # We parse the results from the tests, aggregate it and get the graphs
+- name: Fornat the report
+  fio_report:
+    reports: "{{reports}}"
+    folder: "{{fio_output_dir}}"
+  register: test_result
+  when: reports|length > 0
+
+- name: Generate the output for the failures
+  fio_report:
+    reports: "{{reports_ko}}"
+    ko: true
+    folder: "{{fio_output_dir}}"
+  register: reports_ko
+  when: reports_ko|length > 0
+
+- name: Merge the success and failures
+  set_fact:
+    test_result:
+      results: "{{test_result.get('results', [])|union(reports_ko.get('results', []))}}"
+
+- name: delete the output directory
+  file: "path={{fio_output_dir}} state=absent"
+  when: (not (debug is defined and debug == true))

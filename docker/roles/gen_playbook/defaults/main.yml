@@ -1,0 +1,24 @@
+---
+# defaults file for gen_playbook
+
+default_parameters: {} 
+
+vm_specs:
+  vom:
+    networks: ['oam', 'internal']
+  mn:
+      networks: ['oam', 'internal']
+  ts:
+     networks: ['oam', 'internal', 'access', 'internet']
+  da:
+      networks: ['oam', 'internal']
+  mon:
+      networks: ['oam', 'internal']
+  ddc:
+      networks: ['oam', 'internal', 'access']
+  tools:
+      networks: ['oam']
+  slb:
+      networks: ['oam', 'internal', 'access', 'internet', 'internet_ingress', 'access_ingress']
+
+inaccurate_txt: "{% if inaccurate is defined %}(This result is inaccurate because the hosts_by_type inventory was not found){% endif %}"

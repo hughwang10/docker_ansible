@@ -1,0 +1,10 @@
+# Perform an io ping test
+---
+
+- name: Perform IO ping test
+  io_ping: "disk={{item}} count={{count}} size={{size}}"
+  sudo: yes
+  ignore_errors: yes
+  with_items:
+    - "{{disks}}"
+  register: test_result 

@@ -1,0 +1,231 @@
+##############MSP VM {{ os_stackname }}-{{ vm_name_deploy }} ################################
+
+   oam_port_{{ vm_name_deploy }}:
+      type: {{ os_neutron_port_type }}
+      properties:
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+          network_id: { get_param: oam_net_id }
+{% else %}
+{% if hostvars['oam_net_id']['filename'] != "" %}
+          network_id: {{ hostvars['oam_net_id']['filename'] }}
+{% else %}
+          network_id: "oam_net_id"
+{% endif %}
+{% endif %}
+{% else %}
+          network_id: { get_resource: oam_network }
+{% endif %}
+          fixed_ips:
+            - ip_address: {{ oam_ip }}
+
+   internal_port_{{ vm_name_deploy }}:
+      type: {{ os_neutron_port_type }}
+      properties:
+{% if managed_ips | default(False) | bool == True %}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+         network_id: { get_param: internal_net_id }
+{% else %}
+{% if hostvars['internal_net_id']['filename'] != "" %}
+         network_id: {{ hostvars['internal_net_id']['filename'] }}
+{% else %}
+         network_id: "internal_net_id"
+{% endif %}
+{% endif %}
+{% else %}
+         network_id: { get_resource: internal_network }
+{% endif %}
+         fixed_ips:
+           - ip_address: {{ internal_ip }}
+{% else %}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+         network_id: { get_param: internal_net_id }
+         fixed_ips:
+           - subnet_id: { get_param: internal_subnet_id }
+{% else %}
+{% if hostvars['internal_net_id']['filename'] != "" %}
+         network_id: {{ hostvars['internal_net_id']['filename'] }}
+         fixed_ips:
+           - subnet_id: {{ hostvars['internal_subnet_id']['filename'] }}
+{% else %}
+         network_id: "internal_net_id"
+         fixed_ips:
+           - subnet_id: "internal_subnet_id"
+{% endif %}
+{% endif %}
+{% else %}
+         network_id: { get_attr: [internal_network, my_net_id] }
+         fixed_ips:
+           - subnet_id: { get_attr: [internal_network, my_subnet_id] }
+{% endif %}
+{% endif %}
+
+   access_port_{{ vm_name_deploy }}:
+      type: {{ os_neutron_port_type }}
+      properties:
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+          network_id: { get_param: access_net_id }
+{% else %}
+{% if hostvars['access_net_id']['filename'] != "" %}
+          network_id: {{ hostvars['access_net_id']['filename'] }}
+{% else %}
+          network_id: "access_net_id"
+{% endif %}
+{% endif %}
+{% else %}
+          network_id: { get_resource: access_network }
+{% endif %}
+          fixed_ips:
+{% if managed_ips | default(False) | bool == True %}
+            - ip_address: {{ access_ip }}
+{% else %}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+            - subnet_id: { get_param: access_subnet_id }
+{% else %}
+{% if hostvars['access_subnet_id']['filename'] != "" %}
+            - subnet_id: {{ hostvars['access_subnet_id']['filename'] }}
+{% else %}
+            - subnet_id: "access_subnet_id"
+{% endif %}
+{% endif %}
+{% else %}
+            - subnet_id: { get_resource: access_network_subnet }
+{% endif %}
+{% endif %}
+
+   internet_port_{{ vm_name_deploy }}:
+      type: {{ os_neutron_port_type }}
+      properties:
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+          network_id: { get_param: internet_net_id }
+{% else %}
+{% if hostvars['internet_net_id']['filename'] != "" %}
+          network_id: {{ hostvars['internet_net_id']['filename'] }}
+{% else %}
+          network_id: "internet_net_id"
+{% endif %}
+{% endif %}
+{% else %}
+          network_id: { get_resource: internet_network }
+{% endif %}
+          fixed_ips:
+{% if managed_ips | default(False) | bool == True %}
+            - ip_address: {{ internet_ip }}
+{% else %}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+            - subnet_id: { get_param: internet_subnet_id }
+{% else %}
+{% if hostvars['internet_subnet_id']['filename'] != "" %}
+            - subnet_id: {{ hostvars['internet_subnet_id']['filename'] }}
+{% else %}
+            - subnet_id: "internet_subnet_id"
+{% endif %}
+{% endif %}
+{% else %}
+            - subnet_id: { get_resource: internet_network_subnet }
+{% endif %}
+{% endif %}
+
+{% if controlplanesig_network_prefix is defined %}
+   controlplan_sig_port_{{ vm_name_deploy }}:
+     type: {{ os_neutron_port_type }}
+     properties:
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+         network_id: { get_param: controlplanesig_net_id }
+{% else %}
+{% if hostvars['controlplanesig_net_id']['filename'] != "" %}
+         network_id: {{ hostvars['controlplanesig_net_id']['filename'] }}
+{% else %}
+         network_id: "controlplanesig_net_id"
+{% endif %}
+{% endif %}
+{% else %}
+         network_id: { get_attr: [controlplan_sig_network, my_net_id] }
+{% endif %}
+         fixed_ips:
+{% if managed_ips | default(False) | bool == True %}
+            - ip_address: {{ controlplanesig_ip }}
+{% else %}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+            - subnet_id: { get_param: controlplanesig_subnet_id }
+{% else %}
+{% if hostvars['controlplanesig_subnet_id']['filename'] != "" %}
+            - subnet_id: {{ hostvars['controlplanesig_subnet_id']['filename'] }}
+{% else %}
+            - subnet_id: "controlplanesig_subnet_id"
+{% endif %}
+{% endif %}
+{% else %}
+            - subnet_id: {get_attr: [controlplan_sig_network, my_subnet_id] }
+{% endif %}
+{% endif %}
+{% endif %}
+
+   root_volume_{{ vm_name_deploy }}:
+      type: {{ os_cinder_volume_type }}
+      properties:
+         name: root_{{ vm_name_deploy }}
+         size: {{ os_ts_vol_root_size }}
+{% if manage_templates | default("False") == "True" %}
+         source_volid: {{ hostvars[vm_type]['source_volid'] }}
+{% else %}
+         image: {{ hostvars[vm_type]['filename'] }}
+{% endif %}
+
+{% if system_versiontag_old is not defined %}
+   uc_volume_{{ vm_name }}:
+      type: {{ os_cinder_volume_type }}
+      properties:
+         size: {{ os_ts_vol_uc_size }}
+         name: uc_{{ vm_name }}
+{% endif %}
+
+   ts_instance_{{ vm_name_deploy }}:
+     type: OS::Nova::Server
+     properties:
+       name: {{ os_stackname }}-{{ vm_name }}
+       image: {{ hostvars[vm_type]['filename'] }}
+{% if hagroup is defined %}
+{% if use_heat_env_file | default('False') == 'True' %}
+       flavor: { get_param: ts_flavor_id }
+{% else %}
+{% if hostvars['ts_flavor_id']['filename'] != "" %}
+       flavor: {{ hostvars['ts_flavor_id']['filename'] }}
+{% else %}
+       flavor: "ts_flavor_id"
+{% endif %}
+{% endif %}
+{% else %}
+       flavor: {get_attr: [ts_flavor, my_flavor_id]}
+{% endif %}
+       config_drive: "True"
+{% if hagroup is defined and old_volumes_in_single_stack == True %} 
+       block_device_mapping: [{"volume_id": { get_resource:  root_volume_{{ vm_name_deploy }} }, "device_name": vda}, {"volume_id": "{{ old_uc_volume_id }}", "device_name": vdb}]
+{% else %}
+       block_device_mapping: [{"volume_id": { get_resource:  root_volume_{{ vm_name_deploy }} }, "device_name": vda}, {"volume_id": { get_resource:   uc_volume_{{ vm_name }} }, "device_name": vdb}]   
+{% endif %}
+       user_data_format: RAW
+       user_data:
+        get_file: "{{ output_folder_remote }}/{{ vm_type }}/{{ vm_name_deploy }}-{{ deploy_address }}/user-data"
+{% if hagroup is defined and manage_aggregates | default(True) | bool == True %}
+       availability_zone: "{{ hagroup }}" 
+{% else %}
+       availability_zone: "{{ ts_in_zone }}" 
+{% endif %}
+{% if ts_scheduler_hints | bool == True %}
+       scheduler_hints:
+          "group": "{{ ts_server_group }}"
+{% endif %}
+       metadata:
+          "evacuation_policy": "NoEvacuation"
+       networks: [{port: {get_resource: oam_port_{{ vm_name_deploy }} }},{port: {get_resource: internal_port_{{ vm_name_deploy }} }},{port: {get_resource: access_port_{{ vm_name_deploy }} }},{port: {get_resource: internet_port_{{ vm_name_deploy }} }}{% if controlplanesig_network_prefix is defined %},{port: { get_resource: controlplan_sig_port_{{ vm_name_deploy }} }}{% endif %} ]
+
+

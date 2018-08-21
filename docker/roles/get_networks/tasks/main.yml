@@ -1,0 +1,84 @@
+# Get the network configuration from the deployment configuration files
+---
+  # We include the used var files
+- name: Including config files
+  include_vars: "{{item}}"   
+  with_items:
+   - "{{networks_vars_file}}"
+   - "{{include_vars_files_file}}"
+   - "{{site_vars_file}}"
+   - "{{create_vars_file}}"
+   - "{{misc_vars_file}}"
+
+  # We ensure that there is a host listing for all network
+  # Otherwise we create an empty one
+  # The files are produced by the miit tool
+- name: Creating the inventory Folder if it does not exist
+  file: "path={{base_path + '/system-config/inventory/'}} state=directory"
+
+- name: Looking for the host listing files
+  file: "path={{base_path + '/system-config/inventory/' + item + '_all.yml' }} state=touch"
+  with_items:
+   - "{{networks_names}}"
+
+  # We include the file to get the list of hosts inside each network
+- name: Including the host listings
+  include_vars: "{{base_path + '/system-config/inventory/' + item + '_all.yml' }}"
+  with_items:
+   - "{{networks_names}}"
+
+  # This part is taken from the miit tool
+  # It is used include the configuration files specified by the site
+  # The difference is that it does not include files for the wrong platforms (when statement)
+- name: Including the site specific var files
+  include_vars: "{{vars_dir + '/../' + item.file | regex_replace('^(\\\\\\\\|\\\\\")+([^\\\\\"]+)(\\\\\\\\|\\\\\")+$', '\\\\2') }}"
+  with_items: custom_override_vars_files | default([]) 
+  when: not ( ('vsphere' in item.var and deploy_platform != 'deploy_vsphere') or ('vbox' in item.var and deploy_platform != 'deploy_vbox') or('baremetal' in item.var and deploy_platform != 'deploy_baremetal') or ('openstack' in item.var and deploy_platform != 'deploy_openstack') )
+
+  # We set the network fact
+- name: Creating the fact
+  set_fact:
+   networks: 
+     oam:
+       hosts: "{{oam_all_ips|reject('none')|list}}"
+       iface: "{{vmnic_0}}"
+       name: "{{oam_name}}"
+       gateway: "{{oam_gateway}}"
+     internal:
+       hosts: "{{internal_all_ips|reject('none')|list}}"
+       iface: "{{vmnic_1}}"
+       name: "{{internal_name}}"
+       gateway: "{{internal_gateway}}"
+     access:
+       hosts: "{{access_all_ips|reject('none')|list}}"
+       iface: "{{vmnic_2}}"
+       name: "{{access_name}}"
+       gateway: "{{access_gateway}}"
+     internet:
+       hosts: "{{internet_all_ips|reject('none')|list}}"
+       iface: "{{vmnic_3}}"
+       name: "{{internet_name}}"
+       gateway: "{{internet_gateway}}"
+     access_ingress:
+       hosts: "{{access_ingress_all_ips|reject('none')|list}}"
+       iface: "{{vmnic_4}}"
+       name: "{{accessingress_name}}"
+       gateway: "{{accessingress_gateway}}"
+     internet_ingress:
+       hosts: "{{internet_ingress_all_ips|reject('none')|list}}"
+       iface: "{{vmnic_5}}"
+       name: "{{internetingress_name}}"
+       gateway: "{{internetingress_gateway}}"
+  
+  # As it is not always included the controlplanesig is handle separately
+- name: Handling the Controlplanesig
+  set_fact:
+    controlplanesig:
+      iface: "{{vmnic_2b|default(vmnic_2)}}"
+      name: "{{controlplanesig_name|default('')}}"
+      hosts: "{{controlplanesig_all_ips}}"
+
+- name: Adding controlplanesig if it is defined
+  set_fact:
+    networks: "{{networks|add(controlplanesig, 'controlplanesig')}}"
+  when: controlplanesig_name is defined 

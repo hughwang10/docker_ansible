@@ -1,0 +1,195 @@
+#!/usr/bin/python
+DOCUMENTATION = '''
+---
+module: vsphere_loadfile
+author: MSP Cloud Platform
+version_added: "0.0.1"
+short_description: Load file to VMWare datastore
+requirements: [ pyshpere, pyVmomi  ]
+description:
+    - Load a file to vmware datastore
+options:
+    src:
+        required: true
+        description:
+            - Path and name of source file.
+    dest:
+        required: true
+        description:
+            - Path and name of destination file
+
+    vsphere_vcenter:
+        required: true
+        description:
+            - Vsphere vcenter
+
+    vsphere_vcusername:
+        required: true
+        description:
+            - Vsphere vcusername
+
+    vsphere_vcpassword:
+        required: true
+        description:
+            - Vsphere vcpassword
+
+    vsphere_datacenter:
+        required: true
+        description:
+            - Vsphere datacenter
+
+    vsphere_datastore:
+        required: true
+        description:
+            - Vsphere datastore
+
+    vsphere_esxihostname:
+        required: true
+        description:
+            - Vsphere esxi hostname
+
+'''
+
+EXAMPLES = '''
+# Example vsphere_loadfile command from Ansible Playbooks
+- vsphere_loadfile: src=/path/to/src/file.vmdk dest=/path/to/dest/file.vmdk
+'''
+
+import grp
+import syslog
+import platform
+import atexit
+import requests
+
+from pyVim import connect
+from pyVmomi import vim
+from pyVmomi import vmodl
+
+#from tools import cli
+
+def main():
+    module = AnsibleModule(
+        argument_spec = dict(
+            src=dict(required=True, type='str'),
+            dest=dict(required=True, type='str'),
+            vsphere_vcenter=dict(required=True, type='str'),
+            vsphere_vcusername=dict(required=True, type='str'),
+            vsphere_vcpassword=dict(required=True, type='str'),
+            vsphere_datacenter=dict(required=True, type='str'),
+            vsphere_datastore=dict(required=True, type='str'),
+            vsphere_esxihostname=dict(required=True, type='str'),
+            vsphere_test1=dict(default="xx"),
+            vsphere_test2=dict(required=False, type='str'),
+        ),
+        supports_check_mode=True
+    )
+    try:
+        service_instance = None
+        vsphere_vcenter = module.params.get('vsphere_vcenter')
+        vsphere_vcusername = module.params.get('vsphere_vcusername').replace("##at##","@")
+        vsphere_vcpassword = module.params.get('vsphere_vcpassword')
+        vsphere_datacenter = module.params.get('vsphere_datacenter')
+        vsphere_datastore = module.params.get('vsphere_datastore')
+        vsphere_esxihostname = module.params.get('vsphere_esxihostname')
+        test1 = module.params.get('vsphere_test1')
+        test2 = module.params.get('vsphere_test2')
+        src = module.params.get('src')
+        dest = module.params.get('dest')
+        try:
+            service_instance = connect.SmartConnect(host=vsphere_vcenter,
+                                                    user=vsphere_vcusername,
+                                                    pwd=vsphere_vcpassword,
+                                                    port=int(443))
+        except IOError as e:
+            pass
+        if not service_instance:
+            print("Could not connect to the specified host using specified "
+                  "username and password")
+            raise SystemExit(-1)
+
+        # Ensure that we cleanly disconnect in case our code dies
+        atexit.register(connect.Disconnect, service_instance)
+
+        content = service_instance.RetrieveContent()
+        session_manager = content.sessionManager
+
+        # Get the list of all datacenters we have available to us
+        datacenters_object_view = content.viewManager.CreateContainerView(
+            content.rootFolder,
+            [vim.Datacenter],
+            True)
+
+        # Find the datastore and datacenter we are using
+        datacenter = None
+        datastore = None
+        for dc in datacenters_object_view.view:
+            datastores_object_view = content.viewManager.CreateContainerView(
+                dc,
+                [vim.Datastore],
+                True)
+            for ds in datastores_object_view.view:
+                if ds.info.name == vsphere_datastore:
+                    datacenter = dc
+                    datastore = ds
+        if not datacenter or not datastore:
+            print("Could not find the datastore specified")
+            raise SystemExit(-1)
+        # Clean up the views now that we have what we need
+        datastores_object_view.Destroy()
+        datacenters_object_view.Destroy()
+
+        # Build the url to put the file - https://hostname:port/resource?params
+        if not dest.startswith("/"):
+            remote_file = "/" + dest
+        else:
+            remote_file = dest
+        resource = "/folder" + remote_file
+        params = {"dsName": datastore.info.name,
+                  "dcPath": datacenter.name}
+        http_url = "https://" + vsphere_vcenter + ":443" + resource
+
+        # Get the cookie built from the current session
+        client_cookie = service_instance._stub.cookie
+        # Break apart the cookie into it's component parts - This is more than
+        # is needed, but a good example of how to break apart the cookie
+        # anyways. The verbosity makes it clear what is happening.
+        cookie_name = client_cookie.split("=", 1)[0]
+        cookie_value = client_cookie.split("=", 1)[1].split(";", 1)[0]
+        cookie_path = client_cookie.split("=", 1)[1].split(";", 1)[1].split(
+            ";", 1)[0].lstrip()
+        cookie_text = " " + cookie_value + "; $" + cookie_path
+        # Make a cookie
+        cookie = dict()
+        cookie[cookie_name] = cookie_text
+
+        # Get the request headers set up
+        headers = {'Content-Type': 'application/octet-stream'}
+
+        # Get the file to upload ready, extra protection by using with against
+        # leaving open threads
+        with open(src, "rb") as f:
+            # Connect and upload the file
+            request = requests.put(http_url,
+                                   params=params,
+                                   data=f,
+                                   headers=headers,
+                                   cookies=cookie,
+                                   verify=False)
+
+    except vmodl.MethodFault as e:
+        print("Caught vmodl fault : " + e.msg)
+        raise SystemExit(-1)
+
+    rc = None
+    out = ''
+    err = ''
+    result = {}
+    result['src'] = "OK"
+    result['dest'] = "OK"
+
+
+    module.exit_json(**result)
+
+# import module snippets
+from ansible.module_utils.basic import *
+main()

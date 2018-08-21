@@ -1,0 +1,355 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm2_upgrade_vbox
+
+- stat: path={{ output_folder_remote_old }}
+  register: old_deploy_folder
+
+- fail: msg="Error, old deploy folder does not exists, check where old deployment folder is located."
+  when: old_deploy_folder.stat.isdir is defined and old_deploy_folder.stat.isdir != True
+
+- name: "check if the new deployment is multi stack"
+  shell: ls -F {{ output_folder_remote }}/heat/temp/ | grep "/" | sed 's/.$//'| wc -l 
+  register: new_stack 
+
+- name: "check if the old deployment is single stack"
+  shell: ls -F {{ output_folder_remote_old }}/heat/temp/ | grep "/" | sed 's/.$//'| wc -l
+  register: old_stack
+
+- debug: msg="Backup the running stack first"
+
+- name: "Find vm template files for the running stack"
+  shell: ls {{ output_folder_remote }}/upgrade/2/{{ os_msptemplate }}
+  when: new_stack.stdout == '0'
+  ignore_errors: yes
+
+- name: "mkdir rollover/0"
+  action: file path={{ output_folder_remote }}/rollover/0/temp state=directory
+  ignore_errors: yes
+
+- name: "clean temp dir"
+  shell: rm {{ output_folder_remote }}/rollover/0/temp/*
+  ignore_errors: yes
+
+- name: "backup running template files to rollover/0"
+  shell: cp -R {{ output_folder_remote}}/upgrade/2/*  {{ output_folder_remote }}/rollover/0/
+  when: new_stack.stdout == '0'
+  ignore_errors: yes
+
+- name: "backup running template files to rollover/0, single stack -> multi stack, then rollover case"
+  shell: cp -R {{ output_folder_remote}}/heat/*  {{ output_folder_remote }}/rollover/0/
+  when: new_stack.stdout != '0' and old_stack.stdout == '0'
+  ignore_errors: yes
+
+- debug: msg="Build template fille for Rollover/1"
+  when: ( upgrade_method | default('bulk')) == 'bulk'
+
+- name: "mkdir rollover/1"
+  action: file path={{ output_folder_remote }}/rollover/1/temp state=directory
+  ignore_errors: yes
+  when: ( upgrade_method | default('bulk')) == 'bulk'
+
+- name: "clean temp dir"
+  shell: rm {{ output_folder_remote }}/rollover/1/temp/*
+  ignore_errors: yes
+  when: ( upgrade_method | default('bulk')) == 'bulk'
+
+- name: "copy template files from upgrade/1"
+  shell: cp -R {{ output_folder_remote}}/upgrade/1/*  {{ output_folder_remote }}/rollover/1
+  when: ( upgrade_method | default('bulk')) == 'bulk'
+
+- name: "Copy old 0.yaml from temp/0 to rollove/1, In case if we changed networks during upgrade"
+  shell: cp {{ output_folder_remote }}/upgrade/0/temp/0.yaml {{output_folder_remote }}/rollover/1/temp/0.yaml
+  when: change_networks | default("False") == "True"
+
+- name: "Assemble template file will be used for rollover/1"
+  action: assemble dest="{{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}" src="{{ output_folder_remote}}/rollover/1/temp"
+  when: (( upgrade_method | default('bulk') ) == 'bulk') and ( change_networks | default("False") == "True")
+
+#- name: "Transfer the depends.py script"
+#  copy: src=depends.py dest={{ output_folder_remote }}/rollover/1/ mode=0755
+#  when: ( upgrade_method | default('bulk') == 'bulk')
+
+#- name: "Add dependency per resource_creation_channels"
+#  action: shell python {{ output_folder_remote }}/rollover/1/depends.py -f {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }} -o {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}.depends -t {{ resource_creation_channels | default('0') }}
+#  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0')
+
+#- name: "Rename {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }} as {{ os_msptemplate }}.orig"
+#  action: shell mv {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }} {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}.orig
+#  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0')
+
+#- name: "Rename {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}.depends as {{ os_msptemplate }}"
+#  action: shell mv {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}.depends {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}
+#  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0')
+
+- name: "Transfer the delete_multi_stack.sh script"
+  copy: src=delete_multi_stack.sh dest={{ output_folder_remote }}/rollover/1/ mode=0755
+  when: ( upgrade_method | default('bulk') == 'bulk') and new_stack.stdout != '0' and old_stack.stdout == '0'
+
+- name: "sleep a while"
+  shell: sleep 60
+  when: ( upgrade_method | default('bulk')) == 'bulk' and new_stack.stdout != '0' and old_stack.stdout == '0'
+
+- name: "delete multi stack via delete_multi_stack.sh script"
+  command: "{{ output_folder_remote }}/rollover/1/delete_multi_stack.sh {{ output_folder_remote }}/heat {{ os_stackname }}"
+  when: (action == "deploy_openstack") and (( upgrade_method | default('bulk')) == 'bulk') and (resource_creation_channels | default('0') == '0')
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "find the msp common template file"
+  shell: ls {{ output_folder_remote }}/rollover/1/{{ os_msptemplate }}
+  when: ( upgrade_method | default('bulk')) == 'bulk'
+
+- debug: msg="template file for rollover/1 is ready now"
+  when: ( upgrade_method | default('bulk')) == 'bulk'
+
+- name: "sleep a while"
+  shell: sleep 60
+  when: ( upgrade_method | default('bulk')) == 'bulk' 
+
+- name: "Rollover the running stack to remove the old VM - Phase/1"
+  when: (action == "deploy_openstack") and ( ( upgrade_method | default('bulk')) == 'bulk' )
+  action: shell heat stack-update -f {{output_folder_remote }}/rollover/1/{{ os_msptemplate }} -t 600 {{ os_stackname }}
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait till the stack update completed - Phase/1"
+  when: (action == "deploy_openstack") and ( ( upgrade_method | default('bulk')) == 'bulk' )
+  action: shell heat stack-list |grep {{ os_stackname }}
+  register: result
+  until: result.stdout.find("UPDATE_COMPLETE") !=-1
+  retries: 10000
+  delay:  5 
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- debug: msg="Rollover/1 is done"
+  when: ( upgrade_method | default('bulk')) == 'bulk'
+  
+- debug: "Start Build template files for Rollover/2"
+  when: ( upgrade_method | default('bulk')) == 'bulk'
+
+- name: "mkdir rollover/2"
+  action: file path={{ output_folder_remote }}/rollover/2/temp state=directory
+  ignore_errors: yes
+
+- name: "clean temp dir"
+  shell: rm {{ output_folder_remote }}/rollover/2/temp/*
+  ignore_errors: yes
+
+- name: "Copy Rollover/1 template file"
+  shell: cp -R {{ output_folder_remote }}/rollover/1/* {{ output_folder_remote }}/rollover/2/
+  when: ( upgrade_method | default('bulk')) == 'bulk' 
+
+- name: "mkdir rollover/2"
+  action: file path={{ output_folder_remote }}/upgrade/0/temp state=directory
+  ignore_errors: yes
+  when: ( upgrade_method | default('bulk')) == 'bulk' and new_stack.stdout != '0' and old_stack.stdout == '0'
+
+- name: "clean temp dir"
+  shell: rm {{ output_folder_remote }}/upgrade/0/temp/*
+  ignore_errors: yes
+  when: ( upgrade_method | default('bulk')) == 'bulk' and new_stack.stdout != '0' and old_stack.stdout == '0'
+
+- name: "Copy heat template file"
+  shell: cp -R {{ output_folder_remote_old }}/heat/* {{ output_folder_remote }}/upgrade/0/
+  when: ( upgrade_method | default('bulk')) == 'bulk' and new_stack.stdout != '0' and old_stack.stdout == '0'
+
+- name: "Move 0.yaml out of folder {{ output_folder_remote}}/upgrade/0/temp"
+  shell: mv {{ output_folder_remote }}/upgrade/0/temp/0.yaml {{ output_folder_remote }}/upgrade/0/
+  ignore_errors: yes
+
+- name: "Find mn-01.yaml in upgrade/0/temp"
+  shell: ls {{ output_folder_remote }}/upgrade/0/temp/mn-01.yaml
+  register: file_result
+  ignore_errors: yes
+
+- name: "Replace firstinstall in mn-01.yaml file"
+  shell: sed 's/firstinstall/upgrade/g' {{ output_folder_remote }}/upgrade/0/temp/mn-01.yaml >{{ output_folder_remote }}/upgrade/0/temp/mn-01.yaml.upgrade
+  ignore_errors: yes
+  when: file_result.stdout != ""
+
+#- name: "Get upgrade mn-01.yaml file"
+#  shell: mv {{ output_folder_remote }}/upgrade/0/temp/mn-01.yaml {{ output_folder_remote }}/upgrade/0/temp/mn-01.yaml.firstinstall
+#  ignore_errors: yes
+#  when: file_result.stdout !=""
+
+- name: "Remove the old mn-01.yaml file"
+  shell: rm {{ output_folder_remote }}/upgrade/0/temp/mn-01.yaml
+  ignore_errors: yes
+  when: file_result.stdout !=""
+
+- name: "Get upgrade mn-01.yaml file"
+  shell: mv {{ output_folder_remote }}/upgrade/0/temp/mn-01.yaml.upgrade {{ output_folder_remote }}/upgrade/0/temp/mn-01.yaml
+  ignore_errors: yes
+  when: file_result.stdout !=""
+
+- name: "keep file order per hosts_vmnames"
+  when: ( upgrade_method | default('bulk')) == 'bulk' 
+  shell: touch -c {{ output_folder_remote }}/upgrade/0/temp/{{ item }}.yaml
+  with_items: vm_base_names
+  ignore_errors: yes
+
+#- name: "Copy 0.yaml from rollover/2 to upgrade/0, resource_creation_channels"
+#  shell: cp {{ output_folder_remote }}/rollover/2/temp/0.yaml {{ output_folder_remote }}/upgrade/0/temp/
+#  when: ( action == "deploy_openstack" ) and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0' )
+
+#- name: "assemble stack template files - Bulk upgrade, resource_creation_channels"
+#  when: ( action == "deploy_openstack" ) and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0' )
+#  action: assemble dest="{{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.upgrade.0" src="{{ output_folder_remote}}/upgrade/0/temp"
+
+#- name: "Remove 0.yaml from upgrade/0, resource_creation_channels"
+#  shell: rm {{ output_folder_remote }}/upgrade/0/temp/0.yaml
+#  ignore_errors: yes
+#  when: ( action == "deploy_openstack" ) and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0' )
+
+#- name: "Transfer the depends.py script"
+#  copy: src=depends.py dest={{ output_folder_remote }}/rollover/2/ mode=0755
+#  when: ( upgrade_method | default('bulk') == 'bulk')
+
+#- name: "Add dependency per resource_creation_channels"
+#  action: shell python {{ output_folder_remote }}/rollover/2/depends.py -f {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.upgrade.0 -o {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.upgrade.0.depends -t {{ resource_creation_channels | default('0') }}
+#  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0')
+
+#- name: "move 0.yaml from rollover/2/temp to rollover/2"
+#  shell: mv {{ output_folder_remote }}/rollover/2/temp/0.yaml {{ output_folder_remote }}/rollover/2/
+#  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0')
+
+#- name: "assemble stack template files - Bulk upgrade, resource_creation_channels"
+#  when: ( action == "deploy_openstack" ) and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0' )
+#  action: assemble dest="{{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.vols" src="{{ output_folder_remote}}/rollover/2/temp"
+
+#- name: "remove first column in rollover/2/{{ os_msptemplate}}.vols"
+#  shell: sed -e 's/[^ ]* //' {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.vols > {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.vols.1
+#  when: ( action == "deploy_openstack" ) and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0' )
+
+#- name: "remove blank lines in rollover/2/{{ os_msptemplate }}.vols.1"
+#  shell: sed "/^\s*$/d" {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.vols.1 > {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.vols.2
+
+#- name: "move 0.yaml from rollover/2/ to rollover/2/temp"
+#  shell: mv {{ output_folder_remote }}/rollover/2/0.yaml {{ output_folder_remote }}/rollover/2/temp/
+#  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0')
+
+#- name: "Concatenate old volumes template file + new VMs template file, resource_creation_channels"
+#  shell: cat {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.upgrade.0.depends  {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.vols.2 > {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}
+#  when: ( action == "deploy_openstack" ) and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0' )
+
+#- name: "Copy all files from upgrade/0 to rollover/2, for resource_creation_channels case"
+#  shell: cp -R {{ output_folder_remote }}/upgrade/0/temp/* {{ output_folder_remote }}/rollover/2/temp/
+#  when: ( upgrade_method | default('bulk') == 'bulk' ) and ( resource_creation_channels | default('0') != '0' )
+
+#- name: "assemble stack template files - Bulk upgrade, resource_creation_channels"
+#  when: ( action == "deploy_openstack" ) and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0' )
+#  action: assemble dest="{{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.orig" src="{{ output_folder_remote}}/rollover/2/temp"
+
+#- name: "Transfer the depends.py script"
+#  copy: src=depends.py dest={{ output_folder_remote }}/rollover/2/ mode=0755
+#  when: ( upgrade_method | default('bulk') == 'bulk')
+
+#- name: "Add dependency per resource_creation_channels"
+#  action: shell python {{ output_folder_remote }}/rollover/2/depends.py -f {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.orig -o {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.depends -t {{ resource_creation_channels | default('0') }}
+#  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0')
+
+#- name: "Use rollover/2/{{ os_msptemplate }}.depends as {{ os_msptemplate }}, resource_creation_channels"
+#  shell: mv {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}.depends {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}
+#  when: ( action == "deploy_openstack" ) and ( upgrade_method | default('bulk') == 'bulk') and ( resource_creation_channels | default('0') != '0' )
+  
+- name: "Transfer the rollover script, ready for rollover/2"
+  copy: src=rollover.sh dest={{ output_folder_remote }}/rollover/2/ mode=0755
+  when: ( upgrade_method | default('bulk')) == 'bulk' 
+  ignore_errors: yes
+
+- name: "Transfer the rolling rollover script, ready for rollover/2"
+  copy: src=rolling_rollover.sh dest={{ output_folder_remote }}/rollover/2/ mode=0755
+  when: ( upgrade_method | default('bulk')) == 'rolling' 
+  ignore_errors: yes
+
+- name: "sleep a while"
+  shell: sleep 60
+  
+- debug: msg="Please watch the status in Atlas VM via heat stack-list, nova list, cinder list etc, or tail -f {{ output_folder_remote }}/rollover/2/rollover.log"
+
+#- name: "Deploy using python-heatclient heat stack-update - Bulk Upgrade, resource_creation_channels"
+#  when: (action == "deploy_openstack") and (upgrade_method | default('bulk') == 'bulk') and (resource_creation_channels | default('0') != '0')
+#  action: shell heat stack-update -f {{output_folder_remote }}/rollover/2/{{ os_msptemplate }} -t 600 {{ os_stackname }} 
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+#- name: "Wait till the stack update completed - Bulk Deployment"
+#  when: (action == "deploy_openstack") and ( upgrade_method | default('bulk') == 'bulk') and (resource_creation_channels | default('0') != '0')
+#  action: shell heat stack-list |grep {{ os_stackname }}
+#  register: result
+#  until: result.stdout.find("COMPLETE") !=-1
+#  retries: 100000
+#  delay:  5
+#  environment:
+#      OS_PASSWORD: "{{ os_password }}"
+#      OS_AUTH_URL: "{{ os_authurl }}"
+#      OS_USERNAME: "{{ os_username }}"
+#      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Execute the rollover script, add several over VMs to the running stack  per vms_per_batch"
+  command: "{{ output_folder_remote }}/rollover/2/rollover.sh {{ output_folder_remote }}/upgrade/0 {{ output_folder_remote }}/rollover/2 {{ vms_per_batch | default(2) }} {{ os_msptemplate}} {{ os_stackname }}"
+  when: (action == "deploy_openstack") and (( upgrade_method | default('bulk')) == 'bulk') 
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait till the stack update completed - Phase/2"
+  when: (action == "deploy_openstack") and (( upgrade_method | default('bulk')) == 'bulk') 
+  action: shell heat stack-list |grep {{ os_stackname }}
+  register: result
+  until: result.stdout.find("UPDATE_COMPLETE") !=-1
+  retries: 1200
+  delay:  5 
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Execute the rolling rollover script, rollback from the failed VM, reverse order"
+  command: "{{ output_folder_remote }}/rollover/2/rolling_rollover.sh {{ output_folder_remote }}/upgrade/0 {{ output_folder_remote }}/upgrade/2 {{ output_folder_remote }}/rollover/2 {{ os_msptemplate}} {{ os_stackname }}"
+  when: (action == "deploy_openstack") and (( upgrade_method | default('bulk')) == 'rolling')
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Move 0.yaml back to folder {{ output_folder_remote}}/upgrade/0/temp"
+  shell: mv {{ output_folder_remote }}/upgrade/0/0.yaml {{ output_folder_remote }}/upgrade/0/temp/
+  ignore_errors: yes
+
+- debug: msg="The {{ os_stackname }} template file is {{ output_folder_remote }}/rollover/2/{{ os_msptemplate }}"
+  when: ( upgrade_method | default('bulk')) == 'bulk' 
+
+- debug: msg="The {{ os_stackname }} template file is {{ output_folder_remote }}/upgrade/2/{{ os_msptemplate }}"
+  when: ( upgrade_method | default('bulk')) == 'rolling' 
+
+- debug: msg="Rollover/2 is done, The whole Rollover process is okay!"

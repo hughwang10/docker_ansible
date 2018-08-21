@@ -1,0 +1,46 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# vars file for roles/deploy_openstack
+
+os_username: "admin"
+os_password: "admin"
+os_tenant: "admin"
+os_authurl: "http://137.58.222.100:5000/v2.0/"
+os_stackname: "maxoo"
+os_msptemplate: "msp_stack.yaml"
+os_environment: "environment.yaml"
+
+os_rootpath: "{{ base_path }}"
+os_datafile: "{{ os_rootpath }}system-config/"
+
+os_temp_network: "network.yaml"
+os_temp_flavor: "flavor.yaml"
+os_temp_volume: "volume.yaml"
+os_temp_mn: "mn.yaml"
+os_temp_ts: "ts.yaml"
+os_temp_slb: "slb.yaml"
+os_temp_ddc: "ddc.yaml"
+os_temp_mon: "mon.yaml"
+os_temp_vom: "vom.yaml"
+os_temp_da: "da.yaml"
+
+os_var_network: "network.yml"
+os_var_flavor: "flavor.yml"
+os_var_image: "image.yml"
+os_var_ip: "ip_address.yml"
+
+os_vars: [ "{{ os_var_flavor }}", "{{ os_var_image }}", "{{ os_var_network }}", "{{ os_var_ip }}"]
+os_hotfiles: ["{{ os_temp_network }}", "{{ os_temp_flavor }}", "{{ os_temp_volume }}", "{{ os_temp_mn }}", "{{ os_temp_ts }}", "{{ os_temp_slb }}", "{{ os_temp_ddc }}", "{{ os_temp_mon }}", "{{ os_temp_vom }}", "{{ os_temp_da }}"]
+
+

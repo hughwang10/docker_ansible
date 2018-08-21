@@ -1,0 +1,103 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm2_upgrade_vbox
+
+- name: "Openstack stop vm"
+  action: shell nova stop {{ vm_name_deploy_old }}
+  ignore_errors: True
+  register: result
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait few seconds till stop vm completed"
+  action: shell sleep 10
+  when: (result.stderr == "")
+
+- name: "check if the same image already there or not"
+  action: shell glance image-list | grep data_{{ vm_type }}_{{ vm_name | regex_replace('.*-(.*)$', '\\1') }}_{{ system_versiontag_old }}_clone
+  ignore_errors: yes
+  register: data_image_already_exist
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Check if the current running stack is >= 7.1 CP02"
+  action: shell cinder list | grep data_{{ vm_type }}_{{ vm_name | regex_replace('.*-(.*)$', '\\1') }}_{{ system_versiontag_old }}
+  ignore_errors: True
+  register: cinder_result
+  when: vm_type == "mn" 
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "upload db volumes to glance which will be used later for upgrade, for stack >= 71cp02"
+  action: shell cinder upload-to-image --force True {{ item }}_{{ vm_type }}_{{ vm_name | regex_replace('.*-(.*)$', '\\1') }}_{{ system_versiontag_old }} {{ item }}_{{ vm_type }}_{{ vm_name | regex_replace('.*-(.*)$', '\\1') }}_{{ system_versiontag_old }}_clone 
+  when:  vm_type == "mn" and cinder_result.stdout != "" and data_image_already_exist.stdout ==""
+  with_items:
+        - "arch"
+        - "data"
+        - "backup"
+        - "misc"
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "upload db volumes to glance which will be used later for upgrade, for stack = 7.1 cp01"
+  action: shell cinder upload-to-image --force True {{ item }}_{{ vm_type }}_{{ vm_name | regex_replace('.*-(.*)$', '\\1') }} {{ item }}_{{ vm_type }}_{{ vm_name | regex_replace('.*-(.*)$', '\\1') }}_{{ system_versiontag_old }}_clone
+  when:  vm_type == "mn" and cinder_result.stdout == "" and data_image_already_exist.stdout == ""
+  with_items:
+        - "arch"
+        - "data"
+        - "backup"
+        - "misc"
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait till cinder volume uploading is done"
+  action: shell cinder list |grep uploading
+  register: result
+  ignore_errors: yes
+  until: result.stdout == "" 
+  retries: 1000
+  delay:  5 
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Openstack start vm"
+  action: shell nova start {{ vm_name_deploy_old }}
+  ignore_errors: yes
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait few seconds till start vm completed"
+  action: shell sleep 10
+

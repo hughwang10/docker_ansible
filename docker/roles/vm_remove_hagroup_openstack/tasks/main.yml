@@ -1,0 +1,59 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm_remove_vsphere2
+#- name
+
+- name: "Check if there is a running msp stack"
+  action: shell heat stack-list |grep -w {{ os_stackname }}_{{ hagroup }}
+  when: (action == 'remove_openstack') and (remove_hagroup | default('False') == 'True') and (hagroup is defined) and (hagroup != 'all_groups')
+  register: mspstack_exists
+  ignore_errors: yes
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Delete the stack if the stack is there"
+  when: (action == 'remove_openstack') and (remove_hagroup | default('False') == 'True') and (hagroup is defined) and (hagroup != 'all_groups') and (mspstack_exists.stdout != "") 
+  action: shell heat stack-delete {{ os_stackname }}_{{ hagroup }}
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- name: "Wait till the stack being removed"
+  when: (action == 'remove_openstack') and (remove_hagroup | default('False') == 'True') and (hagroup is defined) and (hagroup != 'all_groups') and (mspstack_exists.stdout != "") 
+  action: shell heat stack-list |grep -w {{ os_stackname }}_{{ hagroup }}
+  register: result
+  ignore_errors: yes
+  until: (result.stdout.find("FAIL") !=-1) or (result.rc == 1)
+  retries: 6000
+  delay:  6
+  environment:
+      OS_PASSWORD: "{{ os_password }}"
+      OS_AUTH_URL: "{{ os_authurl }}"
+      OS_USERNAME: "{{ os_username }}"
+      OS_TENANT_NAME: "{{ os_tenant }}"
+
+- debug: msg="stack {{ os_stackname }}_{{ hagroup }} has been removed"
+  when: (action == "remove_openstack") and (remove_hagroup | default('False') == 'True') and (hagroup is defined) and (hagroup != 'all_groups') and (mspstack_exists.stdout != "")
+
+- debug: msg="stack {{ os_stackname }}_{{ hagroup }} does not exist!"
+  when: (hagroup != 'all_groups') and (mspstack_exists.stdout == "" )
+
+- debug: msg="remove all hagroups are too dangerous, please try to remove hagroup/stack one by one"
+  when: (hagroup == 'all_groups')
+

@@ -1,0 +1,100 @@
+ heat_template_version: 2013-05-23
+
+ description: HOT template for deploying the MSP application
+
+ parameters:
+   oam_net_id:
+     description: oam network id in Neutron
+     type: string
+   oam_subnet_id:
+     description: oam subnet id in Neutron
+     type: string
+   internal_net_id:
+     description: internal network id in Neutron
+     type: string
+   internal_subnet_id:
+     description: internal subnet id in Neutron
+     type: string
+   access_net_id: 
+     description: access network id in Neutron
+     type: string
+   access_subnet_id:
+     description: access subnet id in Neutron
+     type: string
+   internet_net_id:
+     description: internet network id in Neutron
+     type: string
+   internet_subnet_id:
+     description: internet subnet id in Neutron
+     type: string
+   accessingress_net_id:
+     description: accessingress network id in Neutron
+     type: string
+   accessingress_subnet_id:
+     description: accessingress subnet id in Neutron
+     type: string
+   internetingress_net_id:
+     description: internetingress network id in Neutron
+     type: string
+   internetingress_subnet_id:
+     description: internetingress subnet id in Neutron
+     type: string
+   controlplanesig_net_id:
+     description: controlplanesig network id in Neutron
+     type: string
+   controlplanesig_subnet_id:
+     description: controlplanesig subnet id in Neutron
+     type: string
+   infra_ext_net_id:
+     description: cee network id in Neutron
+     type: string
+   infra_ext_subnet_id:
+     description: cee subnet id in Neutron
+     type: string
+   cim_flavor_id:
+     description: cim flavor id in Nova flavor
+     type: string
+   custom_flavor_id:
+     description: custom flavor id in Nova flavor
+     type: string
+   da_flavor_id:
+     description: da flavor id in Nova flavor
+     type: string
+   ddc_flavor_id:
+     description: ddc falvor id in Nova flavor
+     type: string
+   mn_flavor_id:
+     description: mn flavor id in Nova flavor
+     type: string
+   mon_flavor_id:
+     description: mon flavor id in Nova flavor
+     type: string
+   slb_flavor_id:
+     description: slb flavor id in Nova flavor
+     type: string
+   tools_flavor_id:
+     description: tools flavor id in Nova flavor
+     type: string
+   ts_flavor_id:
+     description: ts flavor id in Nova flavor
+     type: string
+   vom_flavor_id:
+     description: vom flavor id in Nova flavor
+     type: string
+{% if system_versiontag_old is defined and system_versiontag != system_versiontag_old %}
+   arch_vol_id:
+     description: MN arch volume id in Glance
+     type: string
+   data_vol_id:
+     description: MN data volume id in Glance
+     type: string
+   backup_vol_id:
+     description: MN backup volume id in Glance
+     type: string
+   misc_vol_id:
+     description: MN misc volume id in Glance
+     type: string
+{% endif %}
+
+ resources:
+

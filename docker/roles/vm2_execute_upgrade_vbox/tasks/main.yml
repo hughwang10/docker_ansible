@@ -1,0 +1,32 @@
+---
+# Copyright (C) 2015 by
+# Ericsson AB
+# S-164 83 Stockholm
+# Sweden
+# Tel: +46 10 719 00 00
+#
+# The program may be used and/or copied only with the written permission
+# from Ericsson AB, or in accordance with the terms and
+# conditions stipulated in the agreement/contract under which the program
+# has been supplied.
+#
+# All rights reserved.
+# tasks file for roles/vm2_execute_upgrade_vbox
+#- name: "poweroff the old version and powerup the new version"
+
+
+- name: "Vbox stop vm"
+  action: shell {{ item[1].cmd }} {{ item[0] }}{{ item[1].arg1 }} {{ item[1].arg2 }} ; sleep 1.0
+  ignore_errors: True
+  with_nested: 
+    - vm_base_names
+    - exe_commands
+  when: force_remove | default(False) != True and force_remove | default(False) != "True" 
+
+#- name: "Vbox start vm"
+#  action: 
+#    command vboxmanage startvm "{{ item }}{{ version_new }}"
+#  ignore_errors: True
+#  with_items: vm_base_names
+#  when: force_remove | default(False) != True and force_remove | default(False) != "True" 
+

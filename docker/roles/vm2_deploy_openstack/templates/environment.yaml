@@ -1,0 +1,13 @@
+resource_registry:
+   "Ericsson::MSP::Network": "{{ os_temp_network }}"
+   "Ericsson::MSP::Flavor": "{{ os_temp_flavor }}"
+   "Ericsson::MSP::volume": "{{ os_temp_volume }}"
+   "Ericsson::MSP::MN": "{{ os_temp_mn }}"
+   "Ericsson::MSP::TS": "{{ os_temp_ts }}"
+   "Ericsson::MSP::SLB": "{{ os_temp_slb }}"
+   "Ericsson::MSP::DDC": "{{ os_temp_ddc }}"
+   "Ericsson::MSP::MON": "{{ os_temp_mon }}"
+   "Ericsson::MSP::VOM": "{{ os_temp_vom }}"
+   "Ericsson::MSP::DA": "{{ os_temp_da }}"
+
+

@@ -1,0 +1,20 @@
+; FIO Job description
+
+[global]
+
+
+[miit-nv]
+
+; Log configuration
+
+write_bw_log={{fio_output_dir}}/{{item.name}}
+write_iops_log={{fio_output_dir}}/{{item.name}}
+write_lat_log={{fio_output_dir}}/{{item.name}}
+
+directory={{fio_output_dir}}
+
+; Jobs configuration
+
+{% for parameter, value in item.iteritems() %}
+{{parameter}}={{value}}
+{% endfor %}

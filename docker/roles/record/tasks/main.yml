@@ -1,0 +1,22 @@
+---
+# tasks file for record
+
+- name: Record the results
+  set_fact: 
+     test_results: "{{test_result.get('results', [])|rejectattr('skipped', 'defined')|map(attribute='result')|select('defined')|list}}"
+
+- name: Add the metadata
+  set_fact:
+    test_results: "{{test_results|map('add_keys', metadata, keep_default=True)|list}}"
+
+- name: Add the id 
+  set_fact:
+    test_results: "{{test_results|map('add_id')|list}}"
+
+- name: Append to the results list
+  set_fact:
+    results: "{{results|union(test_results)}}"
+
+- name: Append Ping to the performed tests
+  set_fact:
+    performed_tests: "{{performed_tests|union(['{{test_name}}'])|unique}}"

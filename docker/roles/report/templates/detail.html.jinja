@@ -1,0 +1,112 @@
+
+{% from "macros.jinja" import start_page, start_subpage, end_page, end_subpage, line with context %}
+{% from "host_info_results.jinja" import host_info_results with context %}
+{% from "ping_results.jinja" import ping_results with context %}
+{% from "http_ping_results.jinja" import http_ping_results with context %}
+{% from "mtr_results.jinja" import mtr_results with context %}
+{% from "fio_results.jinja" import fio_results with context %}
+{% from "iperf_results.jinja" import iperf_results with context %}
+{% from "io_ping_results.jinja" import io_ping_results with context %}
+
+<div class="row">
+  <div class="col-md-2 scrollspy" id="menu">
+    <ul id="nav" class="nav" data-spy="affix" data-offset-top="120">
+    {% for groups in global_results|groupby('_group') %}
+      {% set groupname = groups.grouper %}
+      <li>
+        <a href="#{{groupname|to_uuid}}">{{groupname|title}}</a>
+        <ul class="nav">
+        {% for tests in groups.list|groupby('_host') %}
+          {% set hostname = tests.grouper %}
+          <li>
+            <a href="#{{hostname|to_uuid}}">{{hostvars[hostname]['nv_name']|title}}</a>
+            <ul class="nav">
+              <li><a href="#{{(hostname + 'summary')|to_uuid}}">Summary</a></li> 
+              {% for test in tests.list|groupby('_test') %}
+                {% set test_name = test.grouper %}
+                <li><a href="#{{(hostname + test_name)|to_uuid}}">{{test_name}}</a></li> 
+              {% endfor %}
+            </ul> 
+          </li> 
+        {% endfor %}
+        </ul> 
+      </li>
+    {% endfor %}
+    </ul>
+  </div>
+
+  <div class="col-md-10">
+
+{% for groups in global_results|groupby('_group') %}
+  {% set groupname = groups.grouper %}
+
+  <a id="{{groupname|to_uuid}}"></a>
+  {% for tests in groups.list|groupby('_host') %}
+    {% set hostname = tests.grouper %}
+   
+    {% if tests.list|length > 0 %} 
+      {{start_page(hostname, hostvars[hostname]['nv_name'])}}
+
+          {{start_subpage(hostname + 'summary', 'Summary')}}
+            <div class="col-md-10 col-md-offset-1">
+              <table class="summary-table table table-striped table-bordered table-condensed table-hover nv-table">
+                <thead>
+                  <tr>
+                    <th rowspan="2">Test</th>
+                    <th colspan="3">Results</th>
+                  </tr>
+                  <tr>
+                    <th>Passed</th>
+                    <th>Failed</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for test in tests.list|groupby('_test') %}
+                    {% set test_name = test.grouper%} 
+                    {% set test_list = test.list%} 
+                    {% set total = test_list|length %}
+                    {% set success = test_list|selectattr("_success",'sameas', True)|list %}
+                    {% set failure = test_list|selectattr("_success",'sameas', False)|list %}
+                    {% set total_success = success|length %}
+                    {% set total_failure = failure|length %}
+                    {{ line([test_name, total_success, total_failure, total]) if total > 0 else '' }} 
+                  {% endfor %}
+                </tbody>
+
+              </table>
+            </div>
+          {{end_subpage()}}
+
+        {% for test in tests.list|groupby('_test') %}
+        {% set test_name = test.grouper %}
+        {% set results = test.list %}
+          {% if results|length > 0 %}
+            {{start_subpage(hostname + test_name, test_name)}}
+
+               {% if test_name == 'ping' %} 
+                 {{ping_results(results)}}
+               {% elif test_name == 'mtr' %} 
+                 {{mtr_results(results)}}
+               {% elif test_name == 'iperf' %} 
+                 {{iperf_results(results)}}
+               {% elif test_name == 'host_info' %} 
+                 {{host_info_results(results)}}
+               {% elif test_name == 'io_ping' %} 
+                 {{io_ping_results(results)}}
+               {% elif test_name == 'fio' %} 
+                 {{fio_results(results)}}
+               {% elif test_name == 'http_ping' %} 
+                 {{http_ping_results(results)}}
+               {% endif %}
+            {{end_subpage()}}
+          {% endif %}
+        {% endfor %}
+
+
+      {{end_page()}}
+    {% endif %}
+  {% endfor %}
+{% endfor %}
+  </div>
+</div>

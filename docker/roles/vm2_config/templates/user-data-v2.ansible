@@ -1,0 +1,438 @@
+{% extends "user-data-template-v2.ansible" %}
+{% block header %}
+#cloud-config
+{{ super() }}
+# \brief   cloud-init template for MSP config
+# \version 0.0.17
+# \date    2016-05-12
+# Configuration created for MSP {{ msp_linux_distro | default("SLES_12") }} {{ vm_type }}
+{% endblock header %}
+
+{% block passwd %}
+{{ super() }}
+ expire: False
+#ssh_pwauth: [ True, False, "" or "unchanged" ]
+{% endblock passwd %}
+
+{% block runcmd %}
+{{ super() }}
+{{ self.runcmd_clear_that_bin() }}{{ self.passwd_ageing() }}{{ self.runcmd_grub2() }}{{ self.runcmd_setup_hugepages() }}{{ self.runcmd_kernel_nmi() }}{{ self.runcmd_bindssh() }}{{ self.runcmd_ssh_custom_security() }}{{ self.runcmd_dns() }}{{ self.runcmd_set_keyboard() }}{{ self.runcmd_mellanox_ofed_setup() }}{{ self.runcmd_bluebox_service_start() }}{{ self.runcmd_stop_seeding_from_webserver() }}
+{% endblock runcmd %}
+
+{% block timezone %}timezone: '{{ timezone }}'
+{% endblock timezone %}
+
+{% block write_files %}
+{{ super() }}
+ - content: |
+    {
+{% if vm_type == "l4sf" %}
+    "registrar": "{{ mon_registrar_url }}",
+{% else %}
+    "registrar": "{{ registrar_url }}",
+{% endif %}
+    "clusterid": "{{ clusterid }}",
+{% if vm_type == "l4sf" or vm_type == "cf" %}
+    "vmname":    "{{ vm_type }}-{{ cartridge_number }}",
+{% else %}
+    "vmname":    "{{ vm_name }}",
+{% endif %}
+    "basicauthuser": "{{ authusername }}",
+    "basicauthpwd": "{{ authpasswd }}"{% if cabinet_id is defined %},
+    "cabinetid": "{{ cabinet_id }}"{% endif %}{% if vm_type == "l4sf" %},
+    {{ instanceid_gen(execution_host_index) }}{% endif %}
+
+    }
+   {% if vm_type != "l4sf" %}{{ content_file_path_setup('/opt/miep/init/bootstrap.json','root:root','0644') }}{% endif %}
+{% if vm_type == "l4sf" %}{{ content_file_path_setup('/opt/bluebox/bootstrap.json','bluebox:bluebox','0640') }}{% endif %}
+
+{% if vm_type != "l4sf" %}
+ - content: |
+    [
+    {
+    "interfacename": "{{ vmnic_0 }}",
+    "networkname": "{{ oam_name }}"
+    },
+    {
+    "interfacename": "{{ vmnic_1 }}",
+    "networkname": "{{ internal_name }}"
+    },
+    {
+    "interfacename": "{{ vmnic_2 }}",
+    "networkname": "{{ access_name }}"
+    },
+    {
+    "interfacename": "{{ vmnic_3 }}",
+    "networkname": "{{ internet_name }}"
+    }
+    ]
+   {{ content_file_path_setup('/opt/miep/init/networknames.json','root:root','0644') }}
+{% endif %}
+{% if vm_type == "l4sf" %}
+ - content: |
+    [
+    {
+    "interfacename": "eth0",
+    "networkname": "{{ access_name }}"
+    },
+    {
+    "interfacename": "eth1",
+    "networkname": "{{ internet_name }}"
+    },
+    {
+    "interfacename": "eth2",
+    "networkname": "{{ internal_name }}"
+    }
+    ]
+   {{ content_file_path_setup('/opt/bluebox/networknames.json','bluebox:bluebox','0640') }}
+{% endif %}
+
+{% if vm_type == "l4sf" %}
+ - content: |
+    profile blueProxy {
+      heapsize {{ tip_cfg_heapsize }}
+      minsleep {{ tip_cfg_minsleep }}
+      maxfreq {{ tip_cfg_maxfreq }}
+
+      cpu 0 {
+        # LB setup
+        ethportmask {{ tip_cfg_ethportmask }}
+
+{% if tip_cfg_iface_bonding %}
+        iface bond {{ tip_cfg_iface_port }} mode {{ tip_cfg_bond_mode }}
+        iface slave port 0 bond {{ tip_cfg_iface_port }} primary
+        iface slave port 1 bond {{ tip_cfg_iface_port }}
+        {% endif %}
+
+        # TIP setup eth0
+        iface eth0 port {{ tip_cfg_iface_port }} vlan {{ access_vlan }}
+        lb l3 src-hash inet 0.0.0.0/0
+        router
+        promiscuous
+        offload tx chksum 1
+{{ tip_config_iface_setup(access_network,access_ip,access_network_prefix,access_cidr,use_same_ip_as_cartridge) }}
+{{ tip_config_routing_setup(tip_cfg_access_routes,access_gateway) }}
+        # TIP setup eth1
+        iface eth1 port {{ tip_cfg_iface_port }} vlan {{ internet_vlan }}
+        lb l3 dst-hash inet 0.0.0.0/0
+        router
+        promiscuous
+        offload tx chksum 1
+{{ tip_config_iface_setup(internet_network,internet_ip,internet_network_prefix,internet_cidr,use_same_ip_as_cartridge) }}
+{{ tip_config_routing_setup(tip_cfg_internet_routes,internet_gateway) }}
+        # TIP setup eth2
+        iface eth2 port {{ tip_cfg_iface_port }} vlan {{ internal_vlan }}
+        offload tx chksum 1
+{{ tip_config_iface_setup(internal_network,internal_ip,internal_network_prefix,internal_cidr,use_same_ip_as_cartridge) }}
+{{ tip_config_lb_dport_setup(tip_cfg_lb_dports,tip_cfg_lb_dport_offset) }}
+      }
+    }
+   path: /opt/bluebox/tip.cfg
+   owner: bluebox:bluebox
+   permission: '0644'
+{% endif %}
+
+{% if vm_type != "l4sf" %}
+{# DEPLOY NET TEST {{ network_configuration('static',use_same_ip_as_cartridge,deploynet_network_prefix,deploynet_mtu,vmnic_0_edev,vmnic_0,deploynet_ip,deploynet_broadcast,deploynet_netmask,deploynet_network,deploynet_displayname) }} #}
+{{ network_configuration('static',use_same_ip_as_cartridge,node_offset_oam_ip,oam_network_prefix,oam_mtu,vmnic_0_edev,vmnic_0,oam_ip,oam_broadcast,oam_netmask,oam_network,oam_displayname,oam_ipv6,oam_network_ipv6_prefix,oam_network_ipv6_cidr) }}
+{{ network_configuration('static',use_same_ip_as_cartridge,node_offset_ip,internal_network_prefix,internal_mtu,vmnic_1_edev,vmnic_1,internal_ip,internal_broadcast,internal_netmask,internal_network,internal_displayname) }}
+{{ network_configuration('static',use_same_ip_as_cartridge,node_offset_ip,access_network_prefix,access_mtu,vmnic_2_edev,vmnic_2,access_ip,access_broadcast,access_netmask,access_network,access_displayname,access_ipv6,access_network_ipv6_prefix,access_network_ipv6_cidr) }}
+{{ network_configuration('static',use_same_ip_as_cartridge,node_offset_ip,internet_network_prefix,internet_mtu,vmnic_3_edev,vmnic_3,internet_ip,internet_broadcast,internet_netmask,internet_network,internet_displayname,internet_ipv6,internet_network_ipv6_prefix,internet_network_ipv6_cidr) }}
+
+{% if vmnic_bonds is defined %}
+ - content: |
+    STARTMODE='onboot'
+   path: /etc/sysconfig/network/ifcfg-eth0
+   owner: root:root
+   permissions: '0644'
+
+ - content: |
+    STARTMODE='onboot'
+   path: /etc/sysconfig/network/ifcfg-eth1
+   owner: root:root
+   permissions: '0644'
+   
+ - content: |
+    STARTMODE='onboot'
+    BONDING_MASTER='yes'
+    BONDING_SLAVE_0='eth0'
+    BONDING_SLAVE_1='eth1'
+    BONDING_MODULE_OPTS='mode=802.3ad miimon=500'
+   path: /etc/sysconfig/network/ifcfg-{{ vmnic_0_edev }}
+   owner: root:root
+   permissions: '0644'
+{% endif %}
+
+{% endif %}
+
+{% if vm_type in [ "cf" ] %}
+ - content: |
+    default {{ oam_gateway }} - {{ vmnic_0 }}
+
+   path: /etc/sysconfig/network/routes
+   owner: root:root
+   permissions: '0644'
+{% endif %}
+
+{# COMMENT: should this be here? #}
+{% if udevlocalrules is defined %}
+ - content: {{ udevlocalrules.stdout | default('') | b64encode }} 
+   path: /etc/udev/rules.d/10-local.rules
+   encoding: b64
+   owner: root:root
+   permissions: '0640'
+{% endif %}
+
+{% endblock write_files %}
+
+{% block scripts_per_once %}
+{{ super() }}
+{% endblock scripts_per_once %}
+
+{% block power_state %}
+power_state:
+ mode: reboot
+ message: Server will reboot now
+ timeout: 5
+{% endblock power_state %}
+
+
+{# -------------------------------------------------------------------------------------------- #}
+{#                              RUNCMD BLOCKS IN THIS SECTION                                   #}
+{# -------------------------------------------------------------------------------------------- #}
+
+{% block runcmd_clear_that_bin %}
+ - [ sh, -xc, "/usr/bin/clear" ]
+{% endblock runcmd_clear_that_bin %}
+
+{% block passwd_ageing %}
+{% for account in [ "root", "miepadm" ] %}
+ - [ sh, -xc, "chage -M {{ passwd_ageing | default("60") }} {{ account }};rm -f /etc/shadow-" ]
+{% endfor %}
+{% endblock passwd_ageing %}
+
+{% block runcmd_grub2 %}
+{% if msp_linux_distro | match("SLES_12.*") %}
+ - [ sh, -xc, "sed -i 's/^GRUB_CMDLINE_LINUX=\"\".*/GRUB_CMDLINE_LINUX=\"audit=1\"/' /etc/default/grub" ]
+{% if vm_type == "l4sf" %}
+ - [ sh, -xc, "sed -i 's/quiet\"/quiet/' /etc/default/grub" ]
+ - [ sh, -xc, "sed -i '/GRUB_CMDLINE_LINUX_DEFAULT/ s|$| default_hugepagesz={{ grub_mem_default_hugepagesz }} hugepagesz={{ grub_mem_hugepagesz }} hugepages={{ grub_mem_hugepages }}\"|' /etc/default/grub" ]
+{% endif %}
+ - [ sh, -xc, "sed -i 's/^GRUB_TIMEOUT.*/GRUB_TIMEOUT=0/' /etc/default/grub" ]
+ - [ sh, -xc, "echo GRUB_FORCE_HIDDEN_MENU=true >> /etc/default/grub" ]
+ - [ sh, -xc, "echo GRUB_TIMEOUT_STYLE=hidden >> /etc/default/grub" ]
+ - [ sh, -xc, "/usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg" ]
+{% endif %}
+{% endblock runcmd_grub2 %}
+
+{% block runcmd_setup_hugepages %}
+{% if vm_type == "l4sf" %}
+ - [ sh, -xc, "echo mkdir /mnt/huge >> /etc/init.d/after.local" ]
+ - [ sh, -xc, "echo mount -t hugetlbfs nodev /mnt/huge >> /etc/init.d/after.local" ]
+{% endif %}
+{% endblock runcmd_setup_hugepages %}
+
+{% block runcmd_kernel_nmi %}
+ - [ sh, -xc, "sed -i 's/kernel\\.unknown_nmi_panic.*//' /etc/sysctl.conf" ]
+ - [ sh, -xc, "sed -i 's/kernel\\.panic_on_unrecovered_nmi.*//' /etc/sysctl.conf" ]
+{% endblock runcmd_kernel_nmi %}
+
+{% block runcmd_bindssh %}
+{% if vm_type != "l4sf" and not use_same_ip_as_cartridge %}
+ - [ sh, -xc, "sed -i 's/^ListenAddress.*/ListenAddress {{ oam_ip }}/' /etc/ssh/sshd_config" ]
+{% endif %}
+{% if vm_type != "l4sf" and use_same_ip_as_cartridge %}
+{# OLD WAY - [ sh, -xc, "sed -i 's/^ListenAddress.*/ListenAddress {{ oam_network_prefix }}.{{ cartridge_number | int + node_offset_oam_ip }}/' /etc/ssh/sshd_config" ] #}
+ - [ sh, -xc, "sed -i 's/^ListenAddress.*/ListenAddress {{ (( oam_network | ipaddr('int') + cartridge_number | int + node_offset_oam_ip | int) ) | ipaddr('address') }}/' /etc/ssh/sshd_config" ]
+{% endif %}
+{% endblock runcmd_bindssh %}
+
+{% block runcmd_ssh_custom_security %}
+ - [ sh, -xc, "sed -i 's/^ClientAliveCountMax.*/ClientAliveCountMax '{{ ssh_clientalivecountmax | default(0) }}'/g' /etc/ssh/sshd_config" ]
+ - [ sh, -xc, "sed -i 's/^PermitRootLogin.*/PermitRootLogin '{{ ssh_permitrootlogin | default('no') }}'/g' /etc/ssh/sshd_config" ]
+ - [ sh, -xc, "sed -i 's/^#UseDNS.*/UseDNS '{{ ssh_usedns | default('no') }}'/g' /etc/ssh/sshd_config" ]
+ - [ sh, -xc, "echo auth       optional     pam_faildelay.so delay=5000000  >> /etc/pam.d/sshd" ]
+{% endblock runcmd_ssh_custom_security %}
+
+{% block runcmd_dns %}{% if dns_ip is defined %} - [ sh, -xc, "/sbin/yast2 dns edit nameserver1={{ dns_ip }}" ]
+{% endif %}{% if dns_ip2 is defined %} - [ sh, -xc, "/sbin/yast2 dns edit nameserver2={{ dns_ip2 }}" ]
+{% endif %}{% for dns in dns_ips | default([]) %}
+ - [ sh, -c, "export TERM=vt220 ; /sbin/yast2 dns edit nameserver{{ loop.index }}={{ dns }}" ]
+{% endfor %}
+{% endblock runcmd_dns %}
+
+{% block runcmd_set_keyboard %}
+ - [ sh, -c, "export TERM=vt220 ; /sbin/yast keyboard set layout=swedish" ]
+{% endblock runcmd_set_keyboard %}
+
+{% block runcmd_mellanox_ofed_setup %}
+{% if vm_type == "l4sf" %}
+ - [ sh, -xc, "cd /opt/miep/tools ; tar xf MLNX_OFED_LINUX*.tgz" ]
+ - [ sh, -xc, "cd /opt/miep/tools/MLNX_OFED* ; ./mlnxofedinstall --force" ]
+{% endif %}
+{% endblock runcmd_mellanox_ofed_setup %}
+
+{% block runcmd_sbin_reboot %}
+ - [ sh, -c, "/sbin/reboot" ]
+{% endblock runcmd_sbin_reboot %}
+
+{% block runcmd_bluebox_service_start %}
+{% if vm_type == "l4sf" %}
+ - [ sh, -xc, "chkconfig openibd on" ]
+ - [ sh, -xc, "/etc/init.d/openibd restart" ]
+ - [ sh, -xc, "systemctl enable blueboxd.service" ]
+ - [ sh, -xc, "systemctl start blueboxd.service" ]
+{% endif %}
+{% endblock runcmd_bluebox_service_start %}
+
+{% block runcmd_stop_seeding_from_webserver %}
+ - [ sh, -xc, "sed -i 's/NoCloud:/None:/g' /etc/cloud/cloud.cfg" ]
+ - [ sh, -xc, "sed -i 's/.*seedfrom:.*/    dsmode: net\\n    parseuser: nobody/' /etc/cloud/cloud.cfg" ]
+ - [ sh, -xc, "sed -i 's/^datasource_list: .*$/datasource_list: [\\x27NoCloudNet\\x27,\\x27NoCloud\\x27,\\x27AltCloud\\x27,\\x27ConfigDrive\\x27,\\x27None\\x27]/' /etc/cloud/cloud.cfg" ]
+{% endblock runcmd_stop_seeding_from_webserver %}
+
+
+{# -------------------------------------------------------------------------------------------- #}
+{#                              MACRO FUNCTIONS BELOW THIS LINE                                 #}
+{# -------------------------------------------------------------------------------------------- #}
+
+{# bonding_attributes: defines any required bondings #}
+{% macro bonding_attributes(vmnic_x, args = []) -%}
+{% if vmnic_bonds is defined and vmnic_bonds[0].name == vmnic_x %}  
+    BONDING_MASTER='yes'
+    BONDING_SLAVE_0='{{ vmnic_bonds[0].dev[0] }}'
+    BONDING_SLAVE_1='{{ vmnic_bonds[0].dev[1] }}'
+    BONDING_MODULE_OPTS='{{ vmbnic_bonding_opts | replace("%1%", vmnic_bonds[0].args[0]  | default("")) | replace("%2%", vmnic_bonds[0].dev[0] | default("")) }}'{% endif %}
+{%- endmacro %}
+
+
+{#-----------------------------------------
+ -   Macro name: network_configuration
+ -   Description: Defines a network
+-------------------------------------------#}
+{% macro network_configuration(bootprotomode,network_same_as_cartridge,network_node_offset_ip,network_network_prefix,mtu_network,vmnic_edev,vmnic,network_ip,network_broadcast,network_netmask,network_network,network_displayname,network_ipv6,network_network_ipv6_prefix,network_network_ipv6_cidr) -%}
+{{ content_heading_prefix() | indent(1, True) }}
+    BOOTPROTO='{{ bootprotomode }}'
+{% if mtu_network | default(all_mtu) is defined %}
+    MTU='{{ mtu_network | default(all_mtu) }}'
+{% endif %}
+{% if vmnic_edev != vmnic %}
+    ETHERDEVICE='{{ vmnic_edev }}'
+{% endif %}
+{% if network_ip is defined and not network_same_as_cartridge %}
+    IPADDR='{{ network_ip }}'
+{% endif %}
+{% if network_same_as_cartridge %}
+{# OLD WAY IPADDR='{{ network_network_prefix }}.{{ cartridge_number | int + network_node_offset_ip }}' #}
+    IPADDR='{{ (( network_network | ipaddr('int') + cartridge_number | int + network_node_offset_ip | int) ) | ipaddr('address') }}'
+{% endif %}
+    BROADCAST='{{ network_broadcast }}'
+    NETMASK='{{ network_netmask }}' 
+    NETWORK='{{ network_network }}'
+    STARTMODE='onboot' {{ bonding_attributes(vmnic) }}
+    USERCONTROL='no'
+{{ ifcfg_name(network_displayname | default(none)) }}
+{% if network_ipv6 is defined %} {# COMMENT: NOT FOR INTERNAL USE BUT FOR REST #}
+{% for ipv6i in network_ipv6 %}
+    IPADDR{{ if_ipv6_prefix }}{{ loop.index }}{{ if_ipv6_postfix }}='{{ network_network_ipv6_prefix }}:{{ ipv6short(network_network_ipv6_prefix + ipv6i) }}{{ ipv6i }}/{{ network_network_ipv6_cidr }}' 
+{% endfor %}{% endif %}
+    CHECK_DUPLICATE_IP='yes'
+    SEND_GRATUITOUS_ARP='yes'
+   path: /etc/sysconfig/network/ifcfg-{{ vmnic }}
+   owner: root:root
+   permissions: '0644'
+{%- endmacro %}
+
+
+{#---------------------------------------------------------------------------------------------------------
+ -   Macro name: content_heading_prefix
+ -   Description: Sets a correctly indented "content" prefix since it will not always be intented correctly
+-----------------------------------------------------------------------------------------------------------#}
+{% macro content_heading_prefix() -%}
+ - content: |
+{%- endmacro %}
+
+
+{#-----------------------------------------
+ -   Macro name: ifcfg_name
+ -   Description: Fetches the display network display name
+-------------------------------------------#}
+{% macro ifcfg_name(name=none) -%}
+{% if name != none %}
+    NAME='{{ name }}'{% endif %}
+{%- endmacro %}
+
+
+{#-----------------------------------------
+ -   Macro name: content_file_path_setup
+ -   Description: Populates the content path
+-------------------------------------------#}
+{% macro content_file_path_setup(content_file_path,content_file_owner,content_file_permissions) -%}
+   path: {{ content_file_path }}
+   owner: {{ content_file_owner }}
+   permissions: '{{ content_file_permissions }}'
+{%- endmacro %}
+
+
+{#-----------------------------------------
+ -   Macro name: tip_config_network_setup
+ -   Description: Populates the tip network config
+-------------------------------------------#}
+{% macro tip_config_network_setup(tip_config_iface,tip_config_iface_port,tip_config_iface_ipandmask) -%}
+        # TIP setup {{ tip_config_iface }}
+        iface {{ tip_config_iface }} port {{ tip_config_iface_port }}
+        router
+        promiscuous
+        offload tx chksum 1
+        address inet {{ tip_config_iface_ipandmask }}
+{%- endmacro %}
+
+
+{#-----------------------------------------
+ -   Macro name: tip_config_routing_setup
+ -   Description: Populates the tip routing config
+-------------------------------------------#}
+{% macro tip_config_routing_setup(tip_cfg_routes,tip_cfg_routes_gateway) -%}
+{% if (tip_cfg_routes is defined) %}
+{% for tip_cfg_route in tip_cfg_routes %}
+        route add -net {{ tip_cfg_route }} gw {{ tip_cfg_routes_gateway }}
+{% endfor %}
+{% endif %}
+{%- endmacro %}
+
+
+{#-----------------------------------------
+ -   Macro name: tip_config_lb_dport_setup
+ -   Description: Populates the tip lb dport
+-------------------------------------------#}
+{% macro tip_config_lb_dport_setup(tip_cfg_lb_dports,tip_cfg_lb_dport_offset) -%}
+{% if (tip_cfg_lb_dports is defined) %}
+{% for tip_cfg_lb_dport in tip_cfg_lb_dports %}
+        lb dport {{ tip_cfg_lb_dport }} offset {{ tip_cfg_lb_dport_offset }}
+{% endfor %}
+{% endif %}
+{%- endmacro %}
+
+
+{#-----------------------------------------
+ -   Macro name: instanceid_gen
+ -   Description: generates the instanceid based on the cartridge
+-------------------------------------------#}
+{% macro instanceid_gen(execution_host_cartridge) -%}
+    "instanceid": {{ cartridge_number | int + node_instanceid_offset }}
+{%- endmacro %}
+
+
+{#-----------------------------------------
+ -   Macro name: tip_config_iface_setup 
+ -   Description: Populates the tip config network address
+-------------------------------------------#}
+{% macro tip_config_iface_setup(network_network,network_network_ip,network_network_prefix,network_network_cidr,network_same_as_cartridge) -%}
+{% if network_same_as_cartridge %}
+{# OLD WAY address inet {{ network_network_prefix }}.{{ cartridge_number | int + node_offset_ip }}/{{ network_network_cidr }} #}
+        address inet {{ (( network_network | ipaddr('int') + cartridge_number | int + node_offset_ip | int) ) | ipaddr('address') }}/{{ network_network_cidr }}
+{% else %}
+        address inet {{ network_network_ip }}/{{ network_network_cidr }}
+{% endif %}
+{%- endmacro %}
+
