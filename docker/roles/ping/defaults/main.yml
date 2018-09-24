@@ -1,7 +1,0 @@
----
-# defaults file for test
-count: 5
-timeout: null
-size: null
-interface: null
-interval: 0.2

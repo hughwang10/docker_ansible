@@ -1,8 +1,0 @@
-parameters:
-  infra_ext_net_id: {{ hostvars['infra_ext_net_id']['filename'] }}
-  infra_ext_subnet_id: {{ hostvars['infra_ext_subnet_id']['filename'] }}
-{% if hostvars['tools_flavor_id']['filename'] == "" %}
-  tools_flavor_id: {{ generic_flavor_id.stdout }}
-{% else %}
-  tools_flavor_id: {{ hostvars['tools_flavor_id']['filename'] }}
-{% endif %}

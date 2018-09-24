@@ -1,9 +1,0 @@
----
-# defaults file for record
-metadata:
-  _host: "{{inventory_hostname}}"
-  _label: "{{label}}"
-  _test: "{{test_name}}" 
-  _group: "{{nv_type}}"
-  _success: True 
-  _offenders: {} 

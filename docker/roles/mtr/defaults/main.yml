@@ -1,6 +1,0 @@
----
-# defaults file for nv_mtr
-resolve: false
-count: 10
-size: null
-interval: 0.2 

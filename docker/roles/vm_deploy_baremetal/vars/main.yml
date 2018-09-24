@@ -1,9 +1,0 @@
----
-# vars file for roles/vm_deploy_baremetal
-template_name: "{{ vm_type }}{{ system_versiontag }}-{{ template_postfix | default('template') }}_{{ deployment_index_h }}"
-#execution_host_index_i: "{{ execution_host_index }}"
-execution_host: "{{ baremetal_hpilohostnames[ execution_host_index | default(0) | int ] | default(baremetal_hpilohostnames[0]) }}"
-regexpression: '^[\.]{2}/[\.]{2}(.*)$'
-www_rel_output_path: "{{ rel_base_path | regex_replace(regexpression, '\\\\1') }}"
-www_folder_remote: "{{ output_folder_remote }}/../../{{ system_deploy_subfolder | default('www') }}/{{ outputdir }}/system-config"
-

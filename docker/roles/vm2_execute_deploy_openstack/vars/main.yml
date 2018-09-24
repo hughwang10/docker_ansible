@@ -1,3 +1,0 @@
-hosts_names_vars_file: "{{ rel_base_path | default('../..') }}/system-config/inventory/hosts_vmnames.yml"
-vm_base_names: "{{ hosts_vmnames }}"
-

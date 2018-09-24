@@ -1,5 +1,0 @@
----
-# defaults file for http_ping
-count: 5
-port: 80
-executable: /tmp/http_ping

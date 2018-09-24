@@ -1,14 +1,16 @@
-FROM ubuntu:18.04
-ENV DEBIAN_FRONTEND=noninteractive
+FROM williamyeh/ansible:1.9-ubuntu14.04
+MAINTAINER Hugh Wang
+ENV DEBIAN_FRONTEND noninteractive
+RUN \
+	apt-get update && \
+	apt-get -y upgrade && \
+	apt-get autoremove && apt-get autoclean
+RUN \
+	apt-get -y install sshpass ansible sudo python-pip genisoimage tar && \
+	pip install --upgrade pip
+RUN \
+	pip install 'requests[security]' netaddr pyVmomi pysphere
 
-RUN apt-get -y update && \
-    apt-get -y --fix-missing install software-properties-common sshpass openssh-client python-pip python-selinux python-dev
-
-RUN pip install --upgrade pip
-
-#ansible
-RUN pip install -U 'requests[security]' netaddr pyVmomi pysphere cryptography
-RUN pip install ansible==1.9.6
 RUN mkdir -p /etc/ansible/
 RUN echo 'localhost ansible_connection=local' > /etc/ansible/hosts
 ADD ansible.cfg /etc/ansible/ansible.cfg

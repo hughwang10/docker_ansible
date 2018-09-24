@@ -1,4 +1,0 @@
-{% for dev in vmnic_devs | default([]) %}
-SUBSYSTEMS=="pci", KERNELS=="{{ dev.pci }}", NAME="{{ dev.name }}"
-{% endfor %}
-

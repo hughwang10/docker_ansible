@@ -1,4 +1,0 @@
-# Generate an load an inventory grouped by vm type
----
-- name: Generate inventory
-  template: "src=inventory.jinja dest={{output_dir}}/inventory"
