@@ -1,4 +1,4 @@
-FROM williamyeh/ansible:1.9-ubuntu14.04
+FROM ubuntu:18.04
 MAINTAINER Hugh Wang
 ENV DEBIAN_FRONTEND noninteractive
 RUN \
@@ -6,16 +6,19 @@ RUN \
 	apt-get -y upgrade && \
 	apt-get autoremove && apt-get autoclean
 RUN \
-	apt-get -y install sshpass ansible sudo python-pip genisoimage tar && \
+	apt-get -y install sshpass sudo python-selinux python-pip genisoimage tar && \
 	pip install --upgrade pip
 RUN \
-	pip install 'requests[security]' netaddr pyVmomi pysphere
+    pip install 'cryptography>=2.2.1'
+RUN \
+	pip install netaddr pyVmomi pysphere ansible
+#'requests[security]'
 
 RUN mkdir -p /etc/ansible/
 RUN echo 'localhost ansible_connection=local' > /etc/ansible/hosts
 ADD ansible.cfg /etc/ansible/ansible.cfg
-ADD library /etc/ansible/library
-ADD roles /etc/ansible/roles
+# ADD library /etc/ansible/library
+# ADD roles /etc/ansible/roles
 
 # CMD ansible-playbook --version
 WORKDIR /project

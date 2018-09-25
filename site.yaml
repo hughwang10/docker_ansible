@@ -5,14 +5,14 @@
   gather_facts: false
 
   tasks:
-    - vsphere_guest_afg:
-        vcenter_hostname: "10.44.147.160"
-        username: "administrator@vsphere,local"
-        password: "W@pwap12"
-        guest: newvm001
-        state: absent
-        validate_certs: no
-      register: rst    
+    # - vsphere_guest_afg:
+    #     vcenter_hostname: "10.44.147.160"
+    #     username: "administrator@vsphere,local"
+    #     password: "W@pwap12"
+    #     guest: newvm001
+    #     state: absent
+    #     validate_certs: no
+    #   register: rst    
     # - name: msg="Find the VM"
     #   vsphere_find_vm:
     #     vcenter: 10.44.147.160
@@ -24,4 +24,6 @@
     #     vm_name: c1
     #     folder_name: ""
     #   register: rst
+    - setup:
+      register: rst
     - debug: msg="{{rst}}"  
